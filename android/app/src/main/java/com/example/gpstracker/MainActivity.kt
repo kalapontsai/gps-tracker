@@ -58,15 +58,17 @@ class MainActivity : AppCompatActivity() {
                     val gpsAvailable = intent.getBooleanExtra(LocationService.EXTRA_GPS_AVAILABLE, false)
                     val uploadSuccess = intent.getBooleanExtra(LocationService.EXTRA_UPLOAD_SUCCESS, false)
                     val errorMessage = intent.getStringExtra(LocationService.EXTRA_ERROR_MESSAGE) ?: ""
+                    val nextUploadTime = intent.getLongExtra(LocationService.EXTRA_NEXT_UPLOAD_TIME, 0L)
                     
-                    updateGpsStatus(lat, lng, accuracy, gpsAvailable, uploadSuccess, errorMessage)
+                    updateGpsStatus(lat, lng, accuracy, gpsAvailable, uploadSuccess, errorMessage, nextUploadTime)
                 }
                 LocationService.ACTION_STATUS_CHANGE -> {
                     val gpsAvailable = intent.getBooleanExtra(LocationService.EXTRA_GPS_AVAILABLE, false)
                     val uploadSuccess = intent.getBooleanExtra(LocationService.EXTRA_UPLOAD_SUCCESS, false)
                     val errorMessage = intent.getStringExtra(LocationService.EXTRA_ERROR_MESSAGE) ?: ""
+                    val nextUploadTime = LocationService.nextUploadTime
                     
-                    updateGpsSignalStatus(gpsAvailable, uploadSuccess, errorMessage)
+                    updateGpsSignalStatus(gpsAvailable, uploadSuccess, errorMessage, nextUploadTime)
                 }
             }
         }
@@ -223,7 +225,8 @@ class MainActivity : AppCompatActivity() {
                 LocationService.currentAccuracy,
                 LocationService.isGpsAvailable,
                 LocationService.lastUploadSuccess,
-                LocationService.lastErrorMessage
+                LocationService.lastErrorMessage,
+                LocationService.nextUploadTime
             )
         }
 
@@ -262,7 +265,7 @@ class MainActivity : AppCompatActivity() {
         gpsStatusCard.visibility = View.GONE
     }
     
-    private fun updateGpsStatus(lat: Double, lng: Double, accuracy: Float, gpsAvailable: Boolean, uploadSuccess: Boolean, errorMessage: String) {
+    private fun updateGpsStatus(lat: Double, lng: Double, accuracy: Float, gpsAvailable: Boolean, uploadSuccess: Boolean, errorMessage: String, nextUploadTime: Long) {
         // 顯示 GPS 狀態卡片
         gpsStatusCard.visibility = View.VISIBLE
         
@@ -273,10 +276,10 @@ class MainActivity : AppCompatActivity() {
         accuracyText.text = String.format("準確度: %.1f 公尺", accuracy)
         
         // 更新訊號狀態
-        updateGpsSignalStatus(gpsAvailable, uploadSuccess, errorMessage)
+        updateGpsSignalStatus(gpsAvailable, uploadSuccess, errorMessage, nextUploadTime)
     }
     
-    private fun updateGpsSignalStatus(gpsAvailable: Boolean, uploadSuccess: Boolean, errorMessage: String) {
+    private fun updateGpsSignalStatus(gpsAvailable: Boolean, uploadSuccess: Boolean, errorMessage: String, nextUploadTime: Long) {
         if (gpsAvailable) {
             signalIndicator.setBackgroundResource(R.drawable.signal_indicator)
             signalIndicator.background.setTint(getColor(android.R.color.holo_green_dark))
@@ -290,14 +293,21 @@ class MainActivity : AppCompatActivity() {
         }
         
         // 更新上傳狀態
+        val nextTimeStr = if (nextUploadTime > 0) {
+            val sdf = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+            "下次: ${sdf.format(java.util.Date(nextUploadTime))}"
+        } else {
+            "下次: --"
+        }
+        
         if (uploadSuccess) {
-            uploadStatusText.text = "上傳狀態: 成功"
+            uploadStatusText.text = "上傳狀態: 成功 | $nextTimeStr"
             uploadStatusText.setTextColor(getColor(android.R.color.holo_green_dark))
         } else if (errorMessage.isNotEmpty()) {
             uploadStatusText.text = "上傳狀態: $errorMessage"
             uploadStatusText.setTextColor(getColor(android.R.color.holo_red_dark))
         } else {
-            uploadStatusText.text = "上傳狀態: 等待中..."
+            uploadStatusText.text = "上傳狀態: 等待中... | $nextTimeStr"
             uploadStatusText.setTextColor(getColor(android.R.color.darker_gray))
         }
     }

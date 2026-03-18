@@ -2,7 +2,9 @@ package com.example.gpstracker
 
 import android.content.Intent
 import android.content.SharedPreferences
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.text.InputType
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
@@ -232,6 +234,20 @@ class SettingsActivity : AppCompatActivity() {
                 .putBoolean("network_location", networkLocationSwitch.isChecked)
                 .putBoolean("auto_start", autoStartSwitch.isChecked)
                 .apply()
+
+            // 如果服務正在運行，重新啟動以套用新設定
+            if (LocationService.isRunning) {
+                val serviceIntent = Intent(this, LocationService::class.java)
+                stopService(serviceIntent)
+                
+                Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(serviceIntent)
+                    } else {
+                        startService(serviceIntent)
+                    }
+                }, 500)
+            }
 
             Toast.makeText(this, "設定已儲存", Toast.LENGTH_SHORT).show()
             finish()

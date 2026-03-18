@@ -45,6 +45,7 @@ class LocationService : Service() {
         const val EXTRA_GPS_AVAILABLE = "gps_available"
         const val EXTRA_UPLOAD_SUCCESS = "upload_success"
         const val EXTRA_ERROR_MESSAGE = "error_message"
+        const val EXTRA_NEXT_UPLOAD_TIME = "next_upload_time"
 
         var isRunning = false
             private set
@@ -69,6 +70,10 @@ class LocationService : Service() {
         var currentLng = 0.0
             private set
         var currentAccuracy = 0f
+            private set
+        
+        // 下一次上傳時間（時間戳）
+        var nextUploadTime = 0L
             private set
     }
 
@@ -201,6 +206,9 @@ class LocationService : Service() {
 
     // 廣播位置更新
     private fun broadcastLocationUpdate(lat: Double, lng: Double, accuracy: Float, gpsAvailable: Boolean) {
+        // 計算下次上傳時間
+        nextUploadTime = lastGpsReceivedTime + uploadInterval
+        
         val intent = Intent(ACTION_LOCATION_UPDATE).apply {
             putExtra(EXTRA_LAT, lat)
             putExtra(EXTRA_LNG, lng)
@@ -208,6 +216,7 @@ class LocationService : Service() {
             putExtra(EXTRA_GPS_AVAILABLE, gpsAvailable)
             putExtra(EXTRA_UPLOAD_SUCCESS, lastUploadSuccess)
             putExtra(EXTRA_ERROR_MESSAGE, lastErrorMessage)
+            putExtra(EXTRA_NEXT_UPLOAD_TIME, nextUploadTime)
         }
         sendBroadcast(intent)
     }

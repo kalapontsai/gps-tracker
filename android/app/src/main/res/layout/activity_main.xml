@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="24dp"
+    android:padding="16dp"
     tools:context=".MainActivity">
 
     <TextView
@@ -12,23 +12,23 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="GPS 追蹤器"
-        android:textSize="28sp"
+        android:textSize="24sp"
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        android:layout_marginTop="48dp" />
+        android:layout_marginTop="16dp" />
 
     <ImageView
         android:id="@+id/iconImage"
-        android:layout_width="120dp"
-        android:layout_height="120dp"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
         android:src="@android:drawable/ic_menu_mylocation"
         android:contentDescription="GPS Icon"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/titleText"
-        android:layout_marginTop="32dp"
+        android:layout_marginTop="12dp"
         app:tint="@color/purple_500" />
 
     <TextView
@@ -36,11 +36,11 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="狀態：已停止"
-        android:textSize="18sp"
+        android:textSize="16sp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/iconImage"
-        android:layout_marginTop="24dp" />
+        android:layout_marginTop="8dp" />
 
     <!-- GPS 狀態資訊卡片 -->
     <androidx.cardview.widget.CardView
@@ -122,47 +122,47 @@
         android:layout_width="200dp"
         android:layout_height="wrap_content"
         android:text="開始追蹤"
-        android:textSize="16sp"
+        android:textSize="14sp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/gpsStatusCard"
-        android:layout_marginTop="16dp" />
+        android:layout_marginTop="12dp" />
 
     <Button
         android:id="@+id/stopButton"
         android:layout_width="200dp"
         android:layout_height="wrap_content"
         android:text="停止追蹤"
-        android:textSize="16sp"
+        android:textSize="14sp"
         android:enabled="false"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/startButton"
-        android:layout_marginTop="12dp" />
+        android:layout_marginTop="8dp" />
 
     <Button
         android:id="@+id/settingsButton"
         android:layout_width="200dp"
         android:layout_height="wrap_content"
         android:text="設定"
-        android:textSize="16sp"
+        android:textSize="14sp"
         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/stopButton"
-        android:layout_marginTop="12dp" />
+        android:layout_marginTop="8dp" />
 
     <TextView
         android:id="@+id/infoText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="※ 需要位置權限才能使用\n背景追蹤需要額外授權"
-        android:textSize="12sp"
+        android:text="※ 需要位置權限\n背景追蹤需額外授權"
+        android:textSize="10sp"
         android:textColor="#888888"
         android:gravity="center"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        android:layout_marginBottom="32dp" />
+        android:layout_marginBottom="16dp" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
