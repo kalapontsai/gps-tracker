@@ -1,0 +1,46 @@
+# GPS Tracker - .htaccess 安全設定
+
+# ============================================
+# 基本安全設定
+# ============================================
+
+# 禁止瀏覽目錄列表
+Options -Indexes
+
+# ============================================
+# PHP 安全設定
+# ============================================
+
+# 關閉 PHP 錯誤顯示（正式環境）
+php_flag display_errors Off
+php_flag log_errors On
+
+# ============================================
+# HTTP 安全Headers
+# ============================================
+
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set X-Content-Type-Options "nosniff"
+</IfModule>
+
+# ============================================
+# 允許跨域請求
+# ============================================
+
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type"
+</IfModule>
+
+# ============================================
+# 處理 OPTIONS 預檢請求
+# ============================================
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^.*$ - [R=200,L]
+</IfModule>
