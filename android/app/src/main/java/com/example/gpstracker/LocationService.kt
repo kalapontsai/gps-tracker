@@ -274,6 +274,17 @@ class LocationService : Service() {
         Log.d(TAG, "Location updates stopped")
     }
 
+    // 讀取並清除打卡文字
+    private fun getAndClearCheckInText(): String {
+        val prefs = getSharedPreferences("gps_tracker_prefs", Context.MODE_PRIVATE)
+        val checkInText = prefs.getString("check_in_text", "") ?: ""
+        if (checkInText.isNotEmpty()) {
+            prefs.edit().remove("check_in_text").apply()
+            Log.d(TAG, "Check-in text found and will be sent: $checkInText")
+        }
+        return checkInText
+    }
+
     private fun sendLocationToServer(lat: Double, lng: Double, accuracy: Float) {
         // 檢查是否有設定伺服器網址
         if (serverUrl.isEmpty()) {
@@ -283,6 +294,9 @@ class LocationService : Service() {
             showErrorNotification("請設定伺服器網址")
             return
         }
+
+        // 取得打卡文字
+        val checkInText = getAndClearCheckInText()
 
         serviceScope.launch {
             try {
@@ -295,7 +309,21 @@ class LocationService : Service() {
                     timeZone = TimeZone.getDefault()
                 }.format(Date())
 
-                val jsonBody = """
+                // 建立 JSON，根據是否有打卡文字決定是否包含
+                val jsonBody = if (checkInText.isNotEmpty()) {
+                    """
+                    {
+                        "device_id": "$deviceId",
+                        "nickname": "$nickname",
+                        "lat": $lat,
+                        "lng": $lng,
+                        "accuracy": $accuracy,
+                        "timestamp": "$timestamp",
+                        "check_in": "$checkInText"
+                    }
+                    """.trimIndent()
+                } else {
+                    """
                     {
                         "device_id": "$deviceId",
                         "nickname": "$nickname",
@@ -304,7 +332,8 @@ class LocationService : Service() {
                         "accuracy": $accuracy,
                         "timestamp": "$timestamp"
                     }
-                """.trimIndent()
+                    """.trimIndent()
+                }
 
                 val requestBody = jsonBody.toRequestBody("application/json".toMediaType())
 

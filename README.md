@@ -1,4 +1,4 @@
-# GPS 追蹤器專案
+# GPS 追蹤器專案 (媽媽的關心)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -12,46 +12,50 @@ gps-tracker/
 │   ├── app/
 │   │   ├── src/main/
 │   │   │   ├── java/com/example/gpstracker/
-│   │   │   │   ├── MainActivity.kt      # 主頁面（含鎖定畫面）
+│   │   │   │   ├── MainActivity.kt      # 主頁面（含打卡功能）
 │   │   │   │   ├── LocationService.kt   # 背景追蹤服務
-│   │   │   │   ├── SettingsActivity.kt  # 設定頁面
+│   │   │   │   ├── SettingsActivity.kt   # 設定頁面
 │   │   │   │   └── BootReceiver.kt      # 開機自動啟動
 │   │   │   ├── res/
-│   │   │   │   ├── layout/
-│   │   │   │   │   ├── activity_main.xml
-│   │   │   │   │   ├── activity_settings.xml
-│   │   │   │   │   └── activity_lock.xml
-│   │   │   │   └── values/
+│   │   │   │   └── layout/
 │   │   │   └── AndroidManifest.xml
 │   │   └── build.gradle
 │   └── build.gradle
 │
 ├── receive_gps.php                   # 接收 GPS 資料 API
-├── get_locations.php                  # 取得位置資料 API
-├── view_locations.php                 # 查看追蹤記錄頁面（含地圖 + 日期篩選）
-├── list_locations.php                 # 條列式記錄（含日期篩選）
-├── cleanup.php                        # 清理 30 天前舊資料
-└── update_db.php                      # 資料庫更新腳本
+├── get_locations.php                 # 取得位置資料 API
+├── view_locations.php                # 地圖檢視頁面（含日期篩選）
+├── list_locations.php                # 條列式記錄（含日期篩選）
+├── emergency_sos.php                # 緊急求救 API
+├── rebuild_db.php                   # 資料庫重建腳本
+└── index.php                        # 首頁
 ```
 
 ## 功能特色
 
 ### App 端
-- **設定 UI**：網址、頻率、暱稱、密碼、指紋
-- **鎖定畫面**：密碼或指紋驗證
-- **背景追蹤**：持續記錄 GPS 位置
-- **開機自動啟動**：手機重開機後自動開始追蹤
-- **可調式上傳頻率**：預設 60 秒，可設定 10 秒以上
-- **網路定位備援**：室內也可定位（較不精準）
-- **顯示裝置 ID**：設定頁面顯示專屬裝置識別碼
-- **即時狀態顯示**：App 首頁顯示 GPS 訊號、座標、準確度、上傳狀態
+- **打卡功能** - 輸入打卡文字立即發送 GPS 位置到伺服器
+- **緊急求救** - 大紅色圓形按鈕，一鍵發送位置給緊急聯絡人
+- **背景追蹤** - 持續記錄 GPS 位置
+- **設定項目**：
+  - 伺服器網址
+  - 上傳頻率（秒）
+  - 暱稱
+  - 密碼 / 指紋鎖定
+  - 緊急聯絡人（不限數量）
+  - 網路定位備援
+  - 開機自動啟動
+- **開機自動啟動** - 手機重開機後自動開始追蹤
+- **可調式上傳頻率** - 預設 60 秒，可設定 10 秒以上
+- **顯示裝置 ID** - 設定頁面顯示專屬裝置識別碼
 
 ### Server 端
-- **SQLite 資料庫**：輕量級儲存
-- **30 天資料保留**：自動刪除舊資料
-- **地圖檢視**：Leaflet 地圖顯示
-- **日期篩選**：可按日期範圍篩選記錄
-- **條列檢視**：表格方式顯示所有記錄
+- **SQLite 資料庫** - 輕量級儲存
+- **打卡記錄** - 儲存打卡文字
+- **緊急求救** - 發送 Email 給緊急聯絡人（包含 GPS 位置、Google Maps 連結）
+- **重試機制** - 發送失敗時最多重試 3 次
+- **地圖檢視** - Leaflet 地圖顯示
+- **日期篩選** - 可按日期範圍篩選記錄
 
 ---
 
@@ -79,10 +83,11 @@ APK 輸出位置：`android/app/build/outputs/apk/debug/app-debug.apk`
 2. 設定伺服器網址（如 `https://your-domain.com/receive_gps.php`）
 3. 設定上傳頻率（秒）
 4. 設定暱稱（顯示於網頁）
-5. 可選擇設定密碼和開啟指紋辨識
-6. 可選擇開啟「網路定位備援」（室內使用）
-7. 可選擇開啟「開機自動啟動」
-8. 點擊「開始追蹤」
+5. **設定緊急聯絡人**（用於緊急求救功能）
+6. 可選擇設定密碼和開啟指紋辨識
+7. 可選擇開啟「網路定位備援」（室內使用）
+8. 可選擇開啟「開機自動啟動」
+9. 點擊「開始追蹤」
 
 ---
 
@@ -91,12 +96,13 @@ APK 輸出位置：`android/app/build/outputs/apk/debug/app-debug.apk`
 ### 1. 上傳 PHP 檔案
 
 將以下檔案上傳到您的網頁伺服器：
-- `receive_gps.php` - 接收資料
+- `receive_gps.php` - 接收 GPS 資料
 - `get_locations.php` - API
-- `view_locations.php` - 地圖查看（含日期篩選）
-- `list_locations.php` - 列表查看（含日期篩選）
-- `cleanup.php` - 清理舊資料（可設定排程）
-- `update_db.php` - 資料庫更新
+- `view_locations.php` - 地圖查看
+- `list_locations.php` - 列表查看
+- `emergency_sos.php` - 緊急求救 API
+- `index.php` - 首頁
+- `rebuild_db.php` - 資料庫重建（如需要）
 
 ### 2. 權限設定
 
@@ -107,9 +113,9 @@ chmod 755 your-web-folder
 
 ### 3. 查看追蹤記錄
 
+- 首頁：`https://your-domain.com/index.php`
 - 地圖檢視：`https://your-domain.com/view_locations.php`
 - 列表檢視：`https://your-domain.com/list_locations.php`
-- 首頁：`https://your-domain.com/index.php`
 
 ---
 
@@ -124,7 +130,33 @@ chmod 755 your-web-folder
     "lat": 25.033123,
     "lng": 121.565432,
     "accuracy": 10.5,
-    "timestamp": "2026-03-16T12:00:00Z"
+    "timestamp": "2026-03-19T12:00:00",
+    "check_in": "打卡文字（可選）"
+}
+```
+
+### 緊急求救 POST /emergency_sos.php
+
+```json
+{
+    "lat": 25.033123,
+    "lng": 121.565432,
+    "accuracy": 10.5,
+    "timestamp": "2026-03-19T12:00:00",
+    "contacts": ["email1@example.com", "email2@example.com"]
+}
+```
+
+回傳：
+```json
+{
+    "success": true,
+    "message": "緊急求救已發送給 2 位聯絡人",
+    "data": {
+        "lat": 25.033123,
+        "lng": 121.565432,
+        "success_count": 2
+    }
 }
 ```
 
@@ -136,41 +168,29 @@ chmod 755 your-web-folder
 - `device_id` - 裝置 ID
 - `limit` - 筆數限制（預設 100）
 
-回傳：
-```json
-[
-    {
-        "id": 1,
-        "device_id": "abc123...",
-        "nickname": "我的手機",
-        "latitude": 25.033123,
-        "longitude": 121.565432,
-        "accuracy": 10.5,
-        "timestamp": "2026-03-16T12:00:00Z"
-    }
-]
-```
+---
+
+## 緊急求救功能說明
+
+1. 在設定頁面新增緊急聯絡人 Email（不限數量）
+2. 首頁的大紅色圓形按鈕為「緊急求救」
+3. 按下後會發送 Email 給所有緊急聯絡人
+4. 郵件內容包含：
+   - 發生時間
+   - GPS 座標
+   - Google Maps 連結
+   - 打卡文字（如果有）
+5. 發送失敗會自動重試最多 3 次
 
 ---
 
-## 資料保留設定
+## 打卡功能說明
 
-### 自動清理
-
-系統會自動刪除 30 天前的資料（每次收到新資料時執行）。
-
-### 手動清理
-
-```bash
-curl https://your-domain.com/cleanup.php
-```
-
-### 自動排程
-
-可在伺服器設定 crontab 每天執行：
-```bash
-0 3 * * * curl -s https://your-domain.com/cleanup.php
-```
+1. 在首頁輸入打卡文字
+2. 點擊「確認」按鈕
+3. 立即取得目前 GPS 位置並發送到伺服器
+4. 不需要等待下一次定時發送
+5. 伺服器會記錄打卡文字在 `check_in` 欄位
 
 ---
 
@@ -180,4 +200,4 @@ curl https://your-domain.com/cleanup.php
 2. **SSL 憑證**：Android 預設不接受自簽憑證
 3. **電量**：背景追蹤會消耗較多電量，建議開啟「網路定位備援」可加快定位速度
 4. **流量**：每分鐘上傳一次，約 200-500 bytes/次
-5. **省電**：已移除定時檢查，完全依賴系統事件驅動
+5. **省電**：完全依賴系統事件驅動，無定時檢查

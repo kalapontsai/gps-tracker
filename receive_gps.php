@@ -57,6 +57,12 @@ $accuracy = isset($input['accuracy']) ? floatval($input['accuracy']) : 0;
 $deviceId = isset($input['device_id']) ? $input['device_id'] : 'unknown';
 $nickname = isset($input['nickname']) ? $input['nickname'] : '';
 $timestamp = isset($input['timestamp']) ? $input['timestamp'] : date('c');
+$checkIn = isset($input['check_in']) ? $input['check_in'] : '';
+
+// 記錄收到的打卡資料
+if (!empty($checkIn)) {
+    error_log("Check-in received: $checkIn");
+}
 
 // 驗證座標範圍
 if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
@@ -83,12 +89,13 @@ try {
         longitude REAL NOT NULL,
         accuracy REAL,
         timestamp TEXT NOT NULL,
+        check_in TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )");
     
     // 新增位置資料
-    $stmt = $pdo->prepare("INSERT INTO gps_locations (device_id, nickname, latitude, longitude, accuracy, timestamp) VALUES (?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$deviceId, $nickname, $lat, $lng, $accuracy, $timestamp]);
+    $stmt = $pdo->prepare("INSERT INTO gps_locations (device_id, nickname, latitude, longitude, accuracy, timestamp, check_in) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$deviceId, $nickname, $lat, $lng, $accuracy, $timestamp, $checkIn]);
     
     $locationId = $pdo->lastInsertId();
     

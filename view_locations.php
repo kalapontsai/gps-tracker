@@ -375,6 +375,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             <tr>
                                 <th>時間</th>
                                 <th>暱稱</th>
+                                <th>打卡</th>
                                 <th>裝置</th>
                                 <th>緯度</th>
                                 <th>經度</th>
@@ -386,6 +387,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 <tr>
                                     <td>${loc.timestamp}</td>
                                     <td>${loc.nickname || '-'}</td>
+                                    <td>${loc.check_in || '-'}</td>
                                     <td>${loc.device_id.substring(0, 12)}</td>
                                     <td>${loc.latitude.toFixed(6)}</td>
                                     <td>${loc.longitude.toFixed(6)}</td>
