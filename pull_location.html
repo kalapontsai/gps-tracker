@@ -142,7 +142,12 @@
         accuracy: accuracy,
         device_id: deviceId,
         nickname: nickname,
-        timestamp: new Date().toISOString(),
+        timestamp: (function() {
+          var d = new Date();
+          var pad = function(n) { return n < 10 ? '0' + n : n; };
+          return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate())
+            + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+        })(),
         source: 'web_pull'
       };
 

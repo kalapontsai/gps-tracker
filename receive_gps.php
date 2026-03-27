@@ -56,7 +56,7 @@ $lng = floatval($input['lng']);
 $accuracy = isset($input['accuracy']) ? floatval($input['accuracy']) : 0;
 $deviceId = isset($input['device_id']) ? $input['device_id'] : 'unknown';
 $nickname = isset($input['nickname']) ? $input['nickname'] : '';
-$timestamp = isset($input['timestamp']) ? $input['timestamp'] : date('c');
+$timestamp = isset($input['timestamp']) ? $input['timestamp'] : date('Y-m-d\TH:i:s');
 $checkIn = isset($input['check_in']) ? $input['check_in'] : '';
 $source = isset($input['source']) ? $input['source'] : 'app';
 
