@@ -259,6 +259,11 @@ endif;
                 <h3>📋 記錄列表</h3>
                 <p>條列式顯示 GPS 資料，含日期篩選</p>
             </a>
+
+            <a href="pull_location.html" class="menu-item">
+                <h3>📍 網頁回報位置</h3>
+                <p>透過瀏覽器向伺服器回報目前位置</p>
+            </a>
         </div>
         
         <div class="api-info">
