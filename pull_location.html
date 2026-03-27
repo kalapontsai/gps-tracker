@@ -64,7 +64,7 @@
     const SERVER_URL = CONFIG.server_url || location.origin.replace(/\/$/, '');
     const API_PATH = '/receive_gps.php';
 
-    // 自動產生 device_id（同一瀏覽器重複使用）
+    // 自動產生 device_id（同一瀏覽器重複使用，永不過期）
     function getDeviceId() {
       let id = localStorage.getItem('gps_device_id');
       if (!id) {
@@ -74,8 +74,17 @@
       return id;
     }
 
+    // 讀取並填入已儲存的暱稱
+    function loadSavedNickname() {
+      const saved = localStorage.getItem('gps_nickname');
+      if (saved) {
+        document.getElementById('nicknameInput').value = saved;
+      }
+    }
+
     const deviceId = getDeviceId();
     document.getElementById('deviceIdDisplay').textContent = deviceId;
+    loadSavedNickname();
 
     let retryCount = 0;
     const MAX_RETRIES = 3;
@@ -134,6 +143,9 @@
 
     function sendLocation(lat, lng, accuracy) {
       const nickname = document.getElementById('nicknameInput').value.trim();
+      if (nickname) {
+        localStorage.setItem('gps_nickname', nickname);
+      }
       const autoRetry = document.getElementById('autoCheck').checked;
 
       const payload = {
