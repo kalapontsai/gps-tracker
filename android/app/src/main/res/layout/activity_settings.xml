@@ -16,6 +16,23 @@
             android:text="設定"
             android:textSize="24sp"
             android:textStyle="bold"
+            android:layout_marginBottom="16dp" />
+
+        <!-- 讀取設定檔按鈕 -->
+        <Button
+            android:id="@+id/loadConfigButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="讀取設定檔"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 版次顯示 -->
+        <TextView
+            android:id="@+id/versionText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="#888888"
             android:layout_marginBottom="24dp" />
 
         <!-- 暱稱 -->

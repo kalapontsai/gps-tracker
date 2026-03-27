@@ -2,17 +2,26 @@ package com.example.gpstracker
 
 import android.content.Intent
 import android.content.SharedPreferences
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.text.InputType
+import android.view.View
 import android.widget.*
+
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.util.concurrent.Executor
 
 class SettingsActivity : AppCompatActivity() {
@@ -28,7 +37,9 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var autoStartSwitch: Switch
     private lateinit var testButton: Button
     private lateinit var saveButton: Button
+    private lateinit var loadConfigButton: Button
     private lateinit var testResultText: TextView
+    private lateinit var versionText: TextView
     private lateinit var emergencyContactsContainer: LinearLayout
     private lateinit var emergencyContactInput: EditText
     private lateinit var addEmergencyContactButton: Button
@@ -38,9 +49,16 @@ class SettingsActivity : AppCompatActivity() {
     // 緊急聯絡人集合
     private val emergencyContacts = mutableSetOf<String>()
 
+    private lateinit var filePickerLauncher: ActivityResultLauncher<Intent>
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
+
+        // 註冊檔案選擇器
+        filePickerLauncher = registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) { result -> handleFilePickerResult(result) }
 
         initViews()
         setupEncryptedPrefs()
@@ -49,6 +67,7 @@ class SettingsActivity : AppCompatActivity() {
         setupTestButton()
         setupSaveButton()
         setupEmergencyContacts()
+        setupLoadConfigButton()
     }
 
     private fun setupEmergencyContacts() {
@@ -122,6 +141,69 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    private fun setupLoadConfigButton() {
+        loadConfigButton.setOnClickListener {
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "application/json"
+                putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/json", "text/plain", "*/*"))
+            }
+            filePickerLauncher.launch(intent)
+        }
+    }
+
+    private fun handleFilePickerResult(result: ActivityResult) {
+        if (result.resultCode != RESULT_OK) return
+        
+        val uri = result.data?.data ?: return
+        
+        try {
+            val jsonString = contentResolver.openInputStream(uri)?.use { inputStream ->
+                BufferedReader(InputStreamReader(inputStream)).use { reader ->
+                    reader.readText()
+                }
+            } ?: throw Exception("無法讀取檔案")
+
+            val json = JSONObject(jsonString)
+
+            // 讀取並填入各欄位（自動去除頭尾空白）
+            json.optString("server_url", "").trim().takeIf { it.isNotEmpty() }?.let {
+                serverUrlInput.setText(it)
+            }
+
+            val interval = json.optInt("upload_interval", -1)
+            if (interval > 0) intervalInput.setText(interval.toString())
+
+            json.optString("nickname", "").trim().takeIf { it.isNotEmpty() }?.let {
+                nicknameInput.setText(it)
+            }
+
+            if (json.has("network_location")) {
+                networkLocationSwitch.isChecked = json.getBoolean("network_location")
+            }
+
+            if (json.has("auto_start")) {
+                autoStartSwitch.isChecked = json.getBoolean("auto_start")
+            }
+
+            // 緊急聯絡人
+            if (json.has("emergency_contacts")) {
+                val contactsArray = json.getJSONArray("emergency_contacts")
+                emergencyContacts.clear()
+                for (i in 0 until contactsArray.length()) {
+                    val email = contactsArray.getString(i).trim()
+                    if (email.isNotEmpty()) emergencyContacts.add(email)
+                }
+                updateEmergencyContactsDisplay()
+            }
+
+            Toast.makeText(this, "設定檔讀取成功", Toast.LENGTH_SHORT).show()
+
+        } catch (e: Exception) {
+            Toast.makeText(this, "讀取失敗: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun initViews() {
         serverUrlInput = findViewById(R.id.serverUrlInput)
         intervalInput = findViewById(R.id.intervalInput)
@@ -138,6 +220,8 @@ class SettingsActivity : AppCompatActivity() {
         emergencyContactsContainer = findViewById(R.id.emergencyContactsContainer)
         emergencyContactInput = findViewById(R.id.emergencyContactInput)
         addEmergencyContactButton = findViewById(R.id.addEmergencyContactButton)
+        loadConfigButton = findViewById(R.id.loadConfigButton)
+        versionText = findViewById(R.id.versionText)
 
         // 密碼輸入為密碼類型
         passwordInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -160,6 +244,9 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun loadSettings() {
+        // 顯示版次
+        versionText.text = "v1.1"
+
         // 載入一般設定
         val generalPrefs = getSharedPreferences("gps_tracker_prefs", MODE_PRIVATE)
         serverUrlInput.setText(generalPrefs.getString("server_url", ""))
