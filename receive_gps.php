@@ -58,6 +58,7 @@ $deviceId = isset($input['device_id']) ? $input['device_id'] : 'unknown';
 $nickname = isset($input['nickname']) ? $input['nickname'] : '';
 $timestamp = isset($input['timestamp']) ? $input['timestamp'] : date('c');
 $checkIn = isset($input['check_in']) ? $input['check_in'] : '';
+$source = isset($input['source']) ? $input['source'] : 'app';
 
 // 記錄收到的打卡資料
 if (!empty($checkIn)) {
@@ -90,12 +91,13 @@ try {
         accuracy REAL,
         timestamp TEXT NOT NULL,
         check_in TEXT,
+        source TEXT DEFAULT 'app',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )");
     
     // 新增位置資料
-    $stmt = $pdo->prepare("INSERT INTO gps_locations (device_id, nickname, latitude, longitude, accuracy, timestamp, check_in) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$deviceId, $nickname, $lat, $lng, $accuracy, $timestamp, $checkIn]);
+    $stmt = $pdo->prepare("INSERT INTO gps_locations (device_id, nickname, latitude, longitude, accuracy, timestamp, check_in, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$deviceId, $nickname, $lat, $lng, $accuracy, $timestamp, $checkIn, $source]);
     
     $locationId = $pdo->lastInsertId();
     
@@ -109,7 +111,8 @@ try {
             'lng' => $lng,
             'device_id' => $deviceId,
             'nickname' => $nickname,
-            'timestamp' => $timestamp
+            'timestamp' => $timestamp,
+            'source' => $source
         ]
     ]);
     
