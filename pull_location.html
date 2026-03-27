@@ -19,7 +19,7 @@
     .btn-primary { background: #4a90e2; color: white; margin-bottom: 12px; }
     .btn-primary:hover { background: #3a7bc8; }
     .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
-    .btn-secondary { background: #f0f0f0; color: #333; font-size: 14px; padding: 10px; }
+    .btn-secondary { background: #f0f0f0; color: #333; font-size: 14px; padding: 10px; display: none; width: 100%; }
     .result { margin-top: 20px; padding: 16px; border-radius: 12px; font-size: 14px; display: none; }
     .result.success { background: #e8f5e9; color: #2e7d32; }
     .result.error { background: #ffebee; color: #c62828; }
@@ -52,7 +52,7 @@
     </div>
 
     <button class="btn-primary" id="btn" onclick="requestLocation()">取得並回傳位置</button>
-    <button class="btn-secondary" id="btnClose" onclick="closePage()" style="display:none">關閉頁面</button>
+    <button class="btn-secondary" id="btnClose" onclick="closePage()">關閉頁面</button>
 
     <div class="result" id="result"></div>
     <div class="status" id="status"></div>
@@ -92,7 +92,19 @@
     }
 
     function closePage() {
-      window.close();
+      // 先嘗試 window.close，若失敗則顯示提示
+      var closed = false;
+      try {
+        window.close();
+        closed = true;
+      } catch (e) {
+        closed = false;
+      }
+      if (!closed) {
+        // 顯示引導關閉的提示（行動瀏覽器不允許 JS 關閉自己）
+        document.getElementById('btnClose').style.display = 'none';
+        showResult('請手動關閉此頁面（滑到最上層，點選關閉鈕）', 'info');
+      }
     }
 
     function updateUI(success, retrying) {
