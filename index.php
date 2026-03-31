@@ -264,6 +264,11 @@ endif;
                 <h3>📍 網頁回報位置</h3>
                 <p>透過瀏覽器向伺服器回報目前位置</p>
             </a>
+
+            <a href="timeline_animation.php" class="menu-item">
+                <h3>🎬 時間軸動畫</h3>
+                <p>依時間在地圖上動態播放軌跡點與線</p>
+            </a>
         </div>
         
         <div class="api-info">
