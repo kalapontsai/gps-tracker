@@ -26,6 +26,8 @@ gps-tracker/
 ├── get_locations.php                 # 取得位置資料 API
 ├── view_locations.php                # 地圖檢視頁面（含日期篩選）
 ├── list_locations.php                # 條列式記錄（含日期篩選）
+├── timeline_animation.php            # 時間軸動畫（地圖動態播放軌跡）
+├── pull_location.html                # 網頁回報位置
 ├── emergency_sos.php                # 緊急求救 API
 ├── rebuild_db.php                   # 資料庫重建腳本
 └── index.php                        # 首頁
@@ -56,6 +58,8 @@ gps-tracker/
 - **重試機制** - 發送失敗時最多重試 3 次
 - **地圖檢視** - Leaflet 地圖顯示
 - **日期篩選** - 可按日期範圍篩選記錄
+- **時間軸動畫** - 三大元件（地圖、日曆、時鐘）動態播放軌跡點與線
+- **網頁回報位置** - 透過瀏覽器直接回報 GPS 位置
 
 ---
 
@@ -100,6 +104,8 @@ APK 輸出位置：`android/app/build/outputs/apk/debug/app-debug.apk`
 - `get_locations.php` - API
 - `view_locations.php` - 地圖查看
 - `list_locations.php` - 列表查看
+- `timeline_animation.php` - 時間軸動畫
+- `pull_location.html` - 網頁回報位置
 - `emergency_sos.php` - 緊急求救 API
 - `index.php` - 首頁
 - `rebuild_db.php` - 資料庫重建（如需要）
@@ -116,6 +122,8 @@ chmod 755 your-web-folder
 - 首頁：`https://your-domain.com/index.php`
 - 地圖檢視：`https://your-domain.com/view_locations.php`
 - 列表檢視：`https://your-domain.com/list_locations.php`
+- 時間軸動畫：`https://your-domain.com/timeline_animation.php`
+- 網頁回報位置：`https://your-domain.com/pull_location.html`
 
 ---
 
@@ -201,3 +209,4 @@ chmod 755 your-web-folder
 3. **電量**：背景追蹤會消耗較多電量，建議開啟「網路定位備援」可加快定位速度
 4. **流量**：每分鐘上傳一次，約 200-500 bytes/次
 5. **省電**：完全依賴系統事件驅動，無定時檢查
+6. **資料保留**：GPS 記錄永久保存，不會自動刪除
