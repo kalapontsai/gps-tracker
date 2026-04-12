@@ -5,9 +5,12 @@
  */
 
 // 取得篩選參數
+$nickname = $_GET['nickname'] ?? '';
 $startDate = $_GET['start_date'] ?? '';
 $endDate = $_GET['end_date'] ?? '';
-$deviceId = $_GET['device_id'] ?? '';
+$page = max(1, intval($_GET['page'] ?? 1));
+$perPage = intval($_GET['per_page'] ?? 20);
+$perPageOptions = [10, 20, 50, 100];
 
 $dbFile = __DIR__ . '/gps_data.sqlite';
 $locations = [];
@@ -31,22 +34,41 @@ if (file_exists($dbFile)) {
             $sql .= " AND timestamp <= ?";
             $params[] = $endDate . ' 23:59:59';
         }
-        if (!empty($deviceId)) {
-            $sql .= " AND device_id LIKE ?";
-            $params[] = $deviceId . '%';
+        if (!empty($nickname)) {
+            $sql .= " AND nickname LIKE ?";
+            $params[] = '%' . $nickname . '%';
         }
         
-        $sql .= " ORDER BY timestamp DESC LIMIT 500";
+        $sql .= " ORDER BY timestamp DESC LIMIT ? OFFSET ?";
+        $params[] = $perPage;
+        $params[] = ($page - 1) * $perPage;
         
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         $locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         // 取得總數
-        $countSql = str_replace('SELECT *', 'SELECT COUNT(*) as count', explode('ORDER BY', $sql)[0]);
+        $countParams = [];
+        $countSql = "SELECT COUNT(*) as count FROM gps_locations WHERE 1=1";
+        
+        if (!empty($startDate)) {
+            $countSql .= " AND timestamp >= ?";
+            $countParams[] = $startDate . ' 00:00:00';
+        }
+        if (!empty($endDate)) {
+            $countSql .= " AND timestamp <= ?";
+            $countParams[] = $endDate . ' 23:59:59';
+        }
+        if (!empty($nickname)) {
+            $countSql .= " AND nickname LIKE ?";
+            $countParams[] = '%' . $nickname . '%';
+        }
+        
         $stmtCount = $pdo->prepare($countSql);
-        $stmtCount->execute($params);
+        $stmtCount->execute($countParams);
         $totalCount = $stmtCount->fetch()['count'];
+        
+        $totalPages = ceil($totalCount / $perPage);
         
         // 取得裝置數量
         $deviceStmt = $pdo->query("SELECT COUNT(DISTINCT device_id) as count FROM gps_locations");
@@ -133,13 +155,15 @@ if (file_exists($dbFile)) {
             display: flex;
             gap: 20px;
             margin-bottom: 20px;
+            flex-wrap: wrap;
         }
         .stat-card {
             background: white;
-            padding: 20px;
+            padding: 15px;
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             flex: 1;
+            min-width: 120px;
         }
         .stat-card h3 {
             font-size: 14px;
@@ -155,11 +179,54 @@ if (file_exists($dbFile)) {
             background: white;
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            overflow: hidden;
+            overflow-x: auto;
         }
         table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 600px;
+        }
+        @media (max-width: 640px) {
+            body { padding: 10px; }
+            .filter { padding: 12px; }
+            .filter-row { gap: 10px; }
+            .filter-group { min-width: 45%; }
+            .filter-group input, .filter-group select { padding: 8px; font-size: 13px; }
+            th, td { padding: 10px 8px; font-size: 13px; }
+            .stats { flex-direction: column; gap: 10px; }
+            .stat-card { min-width: auto; }
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .pagination a, .pagination span {
+            padding: 8px 12px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            text-decoration: none;
+            color: #333;
+        }
+        .pagination a:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        .pagination .current {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        .pagination-info {
+            text-align: center;
+            margin-top: 15px;
+            color: #666;
+            font-size: 14px;
         }
         th, td {
             padding: 15px;
@@ -220,8 +287,16 @@ if (file_exists($dbFile)) {
                         <input type="date" name="end_date" value="<?php echo $endDate; ?>">
                     </div>
                     <div class="filter-group">
-                        <label>裝置 ID</label>
-                        <input type="text" name="device_id" value="<?php echo htmlspecialchars($deviceId); ?>" placeholder="輸入裝置 ID">
+                        <label>暱稱</label>
+                        <input type="text" name="nickname" value="<?php echo htmlspecialchars($nickname); ?>" placeholder="輸入暱稱">
+                    </div>
+                    <div class="filter-group">
+                        <label>每頁筆數</label>
+                        <select name="per_page">
+                            <?php foreach ($perPageOptions as $opt): ?>
+                                <option value="<?php echo $opt; ?>" <?php echo $perPage == $opt ? 'selected' : ''; ?>><?php echo $opt; ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <div class="filter-group">
                         <button type="submit">篩選</button>
@@ -283,6 +358,36 @@ if (file_exists($dbFile)) {
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+                
+                <?php if ($totalPages > 1): ?>
+                <div class="pagination-info">
+                    顯示第 <?php echo ($page - 1) * $perPage + 1; ?> - <?php echo min($page * $perPage, $totalCount); ?> 筆，共 <?php echo $totalCount; ?> 筆
+                </div>
+                <div class="pagination">
+                    <?php if ($page > 1): ?>
+                        <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => 1])); ?>">第一頁</a>
+                        <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $page - 1])); ?>">上一頁</a>
+                    <?php endif; ?>
+                    
+                    <?php
+                    $startPage = max(1, $page - 2);
+                    $endPage = min($totalPages, $page + 2);
+                    for ($i = $startPage; $i <= $endPage; $i++):
+                    ?>
+                        <?php if ($i == $page): ?>
+                            <span class="current"><?php echo $i; ?></span>
+                        <?php else: ?>
+                            <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $i])); ?>"><?php echo $i; ?></a>
+                        <?php endif; ?>
+                    <?php endfor; ?>
+                    
+                    <?php if ($page < $totalPages): ?>
+                        <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $page + 1])); ?>">下一頁</a>
+                        <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $totalPages])); ?>">最後頁</a>
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
+                
             <?php endif; ?>
         </div>
     </div>
