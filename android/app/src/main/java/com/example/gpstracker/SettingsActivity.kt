@@ -2,15 +2,26 @@ package com.example.gpstracker
 
 import android.content.Intent
 import android.content.SharedPreferences
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.text.InputType
+import android.view.View
 import android.widget.*
+
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.util.concurrent.Executor
 
 class SettingsActivity : AppCompatActivity() {
@@ -26,13 +37,28 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var autoStartSwitch: Switch
     private lateinit var testButton: Button
     private lateinit var saveButton: Button
+    private lateinit var loadConfigButton: Button
     private lateinit var testResultText: TextView
+    private lateinit var versionText: TextView
+    private lateinit var emergencyContactsContainer: LinearLayout
+    private lateinit var emergencyContactInput: EditText
+    private lateinit var addEmergencyContactButton: Button
 
     private lateinit var masterKey: MasterKey
+
+    // 緊急聯絡人集合
+    private val emergencyContacts = mutableSetOf<String>()
+
+    private lateinit var filePickerLauncher: ActivityResultLauncher<Intent>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
+
+        // 註冊檔案選擇器
+        filePickerLauncher = registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) { result -> handleFilePickerResult(result) }
 
         initViews()
         setupEncryptedPrefs()
@@ -40,6 +66,142 @@ class SettingsActivity : AppCompatActivity() {
         setupBiometric()
         setupTestButton()
         setupSaveButton()
+        setupEmergencyContacts()
+        setupLoadConfigButton()
+    }
+
+    private fun setupEmergencyContacts() {
+        addEmergencyContactButton.setOnClickListener {
+            val email = emergencyContactInput.text.toString().trim()
+            
+            if (email.isEmpty()) {
+                Toast.makeText(this, "請輸入 Email", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            
+            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                Toast.makeText(this, "請輸入有效的 Email", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            
+            if (emergencyContacts.contains(email)) {
+                Toast.makeText(this, "此 Email 已存在", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            
+            emergencyContacts.add(email)
+            emergencyContactInput.text.clear()
+            updateEmergencyContactsDisplay()
+            Toast.makeText(this, "已新增緊急聯絡人", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun updateEmergencyContactsDisplay() {
+        emergencyContactsContainer.removeAllViews()
+        
+        for (contact in emergencyContacts) {
+            val itemLayout = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = 8
+                }
+            }
+            
+            val textView = TextView(this).apply {
+                text = contact
+                layoutParams = LinearLayout.LayoutParams(
+                    0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    1f
+                )
+                textSize = 14f
+                setPadding(0, 8, 0, 8)
+            }
+            
+            val deleteButton = Button(this).apply {
+                text = "X"
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                setTextColor(android.graphics.Color.RED)
+                setOnClickListener {
+                    emergencyContacts.remove(contact)
+                    updateEmergencyContactsDisplay()
+                }
+            }
+            
+            itemLayout.addView(textView)
+            itemLayout.addView(deleteButton)
+            emergencyContactsContainer.addView(itemLayout)
+        }
+    }
+
+    private fun setupLoadConfigButton() {
+        loadConfigButton.setOnClickListener {
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "application/json"
+                putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/json", "text/plain", "*/*"))
+            }
+            filePickerLauncher.launch(intent)
+        }
+    }
+
+    private fun handleFilePickerResult(result: ActivityResult) {
+        if (result.resultCode != RESULT_OK) return
+        
+        val uri = result.data?.data ?: return
+        
+        try {
+            val jsonString = contentResolver.openInputStream(uri)?.use { inputStream ->
+                BufferedReader(InputStreamReader(inputStream)).use { reader ->
+                    reader.readText()
+                }
+            } ?: throw Exception("無法讀取檔案")
+
+            val json = JSONObject(jsonString)
+
+            // 讀取並填入各欄位（自動去除頭尾空白）
+            json.optString("server_url", "").trim().takeIf { it.isNotEmpty() }?.let {
+                serverUrlInput.setText(it)
+            }
+
+            val interval = json.optInt("upload_interval", -1)
+            if (interval > 0) intervalInput.setText(interval.toString())
+
+            json.optString("nickname", "").trim().takeIf { it.isNotEmpty() }?.let {
+                nicknameInput.setText(it)
+            }
+
+            if (json.has("network_location")) {
+                networkLocationSwitch.isChecked = json.getBoolean("network_location")
+            }
+
+            if (json.has("auto_start")) {
+                autoStartSwitch.isChecked = json.getBoolean("auto_start")
+            }
+
+            // 緊急聯絡人
+            if (json.has("emergency_contacts")) {
+                val contactsArray = json.getJSONArray("emergency_contacts")
+                emergencyContacts.clear()
+                for (i in 0 until contactsArray.length()) {
+                    val email = contactsArray.getString(i).trim()
+                    if (email.isNotEmpty()) emergencyContacts.add(email)
+                }
+                updateEmergencyContactsDisplay()
+            }
+
+            Toast.makeText(this, "設定檔讀取成功", Toast.LENGTH_SHORT).show()
+
+        } catch (e: Exception) {
+            Toast.makeText(this, "讀取失敗: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun initViews() {
@@ -55,6 +217,11 @@ class SettingsActivity : AppCompatActivity() {
         testButton = findViewById(R.id.testButton)
         saveButton = findViewById(R.id.saveButton)
         testResultText = findViewById(R.id.testResultText)
+        emergencyContactsContainer = findViewById(R.id.emergencyContactsContainer)
+        emergencyContactInput = findViewById(R.id.emergencyContactInput)
+        addEmergencyContactButton = findViewById(R.id.addEmergencyContactButton)
+        loadConfigButton = findViewById(R.id.loadConfigButton)
+        versionText = findViewById(R.id.versionText)
 
         // 密碼輸入為密碼類型
         passwordInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -77,6 +244,9 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun loadSettings() {
+        // 顯示版次
+        versionText.text = "v1.1"
+
         // 載入一般設定
         val generalPrefs = getSharedPreferences("gps_tracker_prefs", MODE_PRIVATE)
         serverUrlInput.setText(generalPrefs.getString("server_url", ""))
@@ -109,6 +279,11 @@ class SettingsActivity : AppCompatActivity() {
         // 載入開機自動啟動設定
         val autoStartEnabled = generalPrefs.getBoolean("auto_start", false)
         autoStartSwitch.isChecked = autoStartEnabled
+
+        // 載入緊急聯絡人
+        emergencyContacts.clear()
+        emergencyContacts.addAll(generalPrefs.getStringSet("emergency_contacts", emptySet()) ?: emptySet())
+        updateEmergencyContactsDisplay()
 
         // 檢查裝置是否支援指紋
         val biometricManager = BiometricManager.from(this)
@@ -231,7 +406,22 @@ class SettingsActivity : AppCompatActivity() {
                 .putString("nickname", nickname)
                 .putBoolean("network_location", networkLocationSwitch.isChecked)
                 .putBoolean("auto_start", autoStartSwitch.isChecked)
+                .putStringSet("emergency_contacts", emergencyContacts)
                 .apply()
+
+            // 如果服務正在運行，重新啟動以套用新設定
+            if (LocationService.isRunning) {
+                val serviceIntent = Intent(this, LocationService::class.java)
+                stopService(serviceIntent)
+                
+                Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(serviceIntent)
+                    } else {
+                        startService(serviceIntent)
+                    }
+                }, 500)
+            }
 
             Toast.makeText(this, "設定已儲存", Toast.LENGTH_SHORT).show()
             finish()

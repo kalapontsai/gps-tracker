@@ -6,9 +6,9 @@
  */
 
 // 取得篩選參數
+$nickname = $_GET['nickname'] ?? '';
 $startDate = $_GET['start_date'] ?? '';
 $endDate = $_GET['end_date'] ?? '';
-$deviceId = $_GET['device_id'] ?? '';
 
 // 處理清理請求
 $cleanupMessage = '';
@@ -61,7 +61,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         .info { margin-top: 20px; padding: 15px; background: white; border-radius: 8px; }
         .info h3 { margin-bottom: 10px; }
         .table-controls { margin-bottom: 10px; display: flex; gap: 10px; align-items: center; }
-        table { width: 100%; border-collapse: collapse; }
+        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        #tableContainer { overflow-x: auto; }
         th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
         th { background: #f9f9f9; }
         .empty-table { text-align: center; color: #999; padding: 40px; }
@@ -375,6 +376,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             <tr>
                                 <th>時間</th>
                                 <th>暱稱</th>
+                                <th>打卡</th>
                                 <th>裝置</th>
                                 <th>緯度</th>
                                 <th>經度</th>
@@ -386,6 +388,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 <tr>
                                     <td>${loc.timestamp}</td>
                                     <td>${loc.nickname || '-'}</td>
+                                    <td>${loc.check_in || '-'}</td>
                                     <td>${loc.device_id.substring(0, 12)}</td>
                                     <td>${loc.latitude.toFixed(6)}</td>
                                     <td>${loc.longitude.toFixed(6)}</td>

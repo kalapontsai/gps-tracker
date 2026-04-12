@@ -10,9 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.View
 import android.widget.Button
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -21,22 +19,17 @@ import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import org.json.JSONObject
 import java.util.concurrent.Executor
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var statusText: TextView
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
     private lateinit var settingsButton: Button
-    
-    // GPS 狀態 Views
-    private lateinit var gpsStatusCard: View
-    private lateinit var signalIndicator: View
-    private lateinit var signalStatusText: TextView
-    private lateinit var coordinateText: TextView
-    private lateinit var accuracyText: TextView
-    private lateinit var uploadStatusText: TextView
+    private lateinit var emergencyButton: Button
+    private lateinit var checkInInput: android.widget.EditText
+    private lateinit var checkInConfirmButton: Button
 
     private lateinit var executor: Executor
     private lateinit var biometricPrompt: BiometricPrompt
@@ -46,31 +39,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var securePrefs: SharedPreferences
 
     private var isAuthenticated = false
-    
-    // 廣播接收器
-    private val locationReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            when (intent?.action) {
-                LocationService.ACTION_LOCATION_UPDATE -> {
-                    val lat = intent.getDoubleExtra(LocationService.EXTRA_LAT, 0.0)
-                    val lng = intent.getDoubleExtra(LocationService.EXTRA_LNG, 0.0)
-                    val accuracy = intent.getFloatExtra(LocationService.EXTRA_ACCURACY, 0f)
-                    val gpsAvailable = intent.getBooleanExtra(LocationService.EXTRA_GPS_AVAILABLE, false)
-                    val uploadSuccess = intent.getBooleanExtra(LocationService.EXTRA_UPLOAD_SUCCESS, false)
-                    val errorMessage = intent.getStringExtra(LocationService.EXTRA_ERROR_MESSAGE) ?: ""
-                    
-                    updateGpsStatus(lat, lng, accuracy, gpsAvailable, uploadSuccess, errorMessage)
-                }
-                LocationService.ACTION_STATUS_CHANGE -> {
-                    val gpsAvailable = intent.getBooleanExtra(LocationService.EXTRA_GPS_AVAILABLE, false)
-                    val uploadSuccess = intent.getBooleanExtra(LocationService.EXTRA_UPLOAD_SUCCESS, false)
-                    val errorMessage = intent.getStringExtra(LocationService.EXTRA_ERROR_MESSAGE) ?: ""
-                    
-                    updateGpsSignalStatus(gpsAvailable, uploadSuccess, errorMessage)
-                }
-            }
-        }
-    }
 
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -198,36 +166,35 @@ class MainActivity : AppCompatActivity() {
     private fun showMainScreen() {
         setContentView(R.layout.activity_main)
 
-        statusText = findViewById(R.id.statusText)
         startButton = findViewById(R.id.startButton)
         stopButton = findViewById(R.id.stopButton)
         settingsButton = findViewById(R.id.settingsButton)
-        
-        // GPS 狀態 Views
-        gpsStatusCard = findViewById(R.id.gpsStatusCard)
-        signalIndicator = findViewById(R.id.signalIndicator)
-        signalStatusText = findViewById(R.id.signalStatusText)
-        coordinateText = findViewById(R.id.coordinateText)
-        accuracyText = findViewById(R.id.accuracyText)
-        uploadStatusText = findViewById(R.id.uploadStatusText)
+        emergencyButton = findViewById(R.id.emergencyButton)
+        checkInInput = findViewById(R.id.checkInInput)
+        checkInConfirmButton = findViewById(R.id.checkInConfirmButton)
 
         updateStatus()
-        
-        // 如果服務正在運行，註冊廣播接收器
-        if (LocationService.isRunning) {
-            registerLocationReceiver()
-            // 顯示目前狀態
-            updateGpsStatus(
-                LocationService.currentLat,
-                LocationService.currentLng,
-                LocationService.currentAccuracy,
-                LocationService.isGpsAvailable,
-                LocationService.lastUploadSuccess,
-                LocationService.lastErrorMessage
-            )
+
+        // 確認按鈕：立即發送打卡
+        checkInConfirmButton.setOnClickListener {
+            val checkInText = checkInInput.text.toString().trim()
+            if (checkInText.isEmpty()) {
+                Toast.makeText(this, "請輸入打卡內容", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            
+            // 隱藏鍵盤
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.hideSoftInputFromWindow(checkInInput.windowToken, 0)
+            checkInInput.clearFocus()
+            
+            // 取得目前位置並立即發送
+            sendCheckIn(checkInText)
         }
 
         startButton.setOnClickListener {
+            // 點擊開始追蹤時，也儲存打卡文字
+            saveCheckInText()
             requestLocationPermissions()
         }
 
@@ -238,77 +205,232 @@ class MainActivity : AppCompatActivity() {
         settingsButton.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
+
+        emergencyButton.setOnClickListener {
+            saveCheckInText()
+            sendEmergencyAlert()
+        }
     }
-    
-    private fun registerLocationReceiver() {
-        val filter = IntentFilter().apply {
-            addAction(LocationService.ACTION_LOCATION_UPDATE)
-            addAction(LocationService.ACTION_STATUS_CHANGE)
+
+    private fun saveCheckInText() {
+        val checkInText = checkInInput.text.toString().trim()
+        if (checkInText.isNotEmpty()) {
+            val prefs = getSharedPreferences("gps_tracker_prefs", MODE_PRIVATE)
+            prefs.edit().putString("check_in_text", checkInText).commit()
+            // 清空輸入框
+            checkInInput.text.clear()
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(locationReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(locationReceiver, filter)
-        }
-        gpsStatusCard.visibility = View.VISIBLE
     }
-    
-    private fun unregisterLocationReceiver() {
-        try {
-            unregisterReceiver(locationReceiver)
-        } catch (e: Exception) {
-            // 接收器可能未註冊
+
+    private fun sendCheckIn(checkInText: String) {
+        // 取得目前位置
+        val lat = LocationService.currentLat
+        val lng = LocationService.currentLng
+        val accuracy = LocationService.currentAccuracy
+        val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault()).apply {
+            timeZone = java.util.TimeZone.getDefault()
+        }.format(java.util.Date())
+
+        // 檢查是否有位置資料
+        if (lat == 0.0 && lng == 0.0) {
+            Toast.makeText(this, "無法取得位置資訊，請先開始追蹤", Toast.LENGTH_LONG).show()
+            return
         }
-        gpsStatusCard.visibility = View.GONE
+
+        // 讀取伺服器網址和deviceId和暱稱
+        val prefs = getSharedPreferences("gps_tracker_prefs", MODE_PRIVATE)
+        val serverUrl = prefs.getString("server_url", "") ?: ""
+        val deviceId = prefs.getString("device_id", "") ?: ""
+        val nickname = prefs.getString("nickname", "") ?: ""
+
+        if (serverUrl.isEmpty()) {
+            Toast.makeText(this, "請先設定伺服器網址", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        // 發送打卡
+        checkInConfirmButton.isEnabled = false
+        checkInConfirmButton.text = "發送中..."
+
+        Thread {
+            try {
+                val url = java.net.URL(serverUrl)
+                val connection = url.openConnection() as java.net.HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.doOutput = true
+                connection.connectTimeout = 30000
+                connection.readTimeout = 30000
+
+                val jsonBody = """
+                    {
+                        "device_id": "$deviceId",
+                        "nickname": "$nickname",
+                        "lat": $lat,
+                        "lng": $lng,
+                        "accuracy": $accuracy,
+                        "timestamp": "$timestamp",
+                        "check_in": "$checkInText"
+                    }
+                """.trimIndent()
+
+                val outputStream = connection.outputStream
+                outputStream.write(jsonBody.toByteArray())
+                outputStream.flush()
+                outputStream.close()
+
+                val responseCode = connection.responseCode
+                
+                runOnUiThread {
+                    if (responseCode == 200 || responseCode == 201) {
+                        Toast.makeText(this@MainActivity, "打卡成功", Toast.LENGTH_SHORT).show()
+                        // 清空輸入框
+                        checkInInput.text.clear()
+                    } else {
+                        Toast.makeText(this@MainActivity, "打卡失敗: HTTP $responseCode", Toast.LENGTH_LONG).show()
+                    }
+                    checkInConfirmButton.isEnabled = true
+                    checkInConfirmButton.text = "確認"
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "打卡錯誤: ${e.message}", Toast.LENGTH_LONG).show()
+                    checkInConfirmButton.isEnabled = true
+                    checkInConfirmButton.text = "確認"
+                }
+            }
+        }.start()
     }
-    
-    private fun updateGpsStatus(lat: Double, lng: Double, accuracy: Float, gpsAvailable: Boolean, uploadSuccess: Boolean, errorMessage: String) {
-        // 顯示 GPS 狀態卡片
-        gpsStatusCard.visibility = View.VISIBLE
-        
-        // 更新座標
-        coordinateText.text = String.format("座標: %.6f, %.6f", lat, lng)
-        
-        // 更新準確度
-        accuracyText.text = String.format("準確度: %.1f 公尺", accuracy)
-        
-        // 更新訊號狀態
-        updateGpsSignalStatus(gpsAvailable, uploadSuccess, errorMessage)
-    }
-    
-    private fun updateGpsSignalStatus(gpsAvailable: Boolean, uploadSuccess: Boolean, errorMessage: String) {
-        if (gpsAvailable) {
-            signalIndicator.setBackgroundResource(R.drawable.signal_indicator)
-            signalIndicator.background.setTint(getColor(android.R.color.holo_green_dark))
-            signalStatusText.text = "GPS 訊號正常"
-            signalStatusText.setTextColor(getColor(android.R.color.holo_green_dark))
-        } else {
-            signalIndicator.setBackgroundResource(R.drawable.signal_indicator)
-            signalIndicator.background.setTint(getColor(android.R.color.holo_red_dark))
-            signalStatusText.text = "等待 GPS 訊號..."
-            signalStatusText.setTextColor(getColor(android.R.color.holo_red_dark))
+
+    private fun sendEmergencyAlert() {
+        // 取得目前位置或上一筆位置
+        val lat = LocationService.currentLat
+        val lng = LocationService.currentLng
+        val accuracy = LocationService.currentAccuracy
+        val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+
+        // 檢查是否有位置資料
+        if (lat == 0.0 && lng == 0.0) {
+            Toast.makeText(this, "無法取得位置資訊，無法發送緊急求救", Toast.LENGTH_LONG).show()
+            return
         }
-        
-        // 更新上傳狀態
-        if (uploadSuccess) {
-            uploadStatusText.text = "上傳狀態: 成功"
-            uploadStatusText.setTextColor(getColor(android.R.color.holo_green_dark))
-        } else if (errorMessage.isNotEmpty()) {
-            uploadStatusText.text = "上傳狀態: $errorMessage"
-            uploadStatusText.setTextColor(getColor(android.R.color.holo_red_dark))
-        } else {
-            uploadStatusText.text = "上傳狀態: 等待中..."
-            uploadStatusText.setTextColor(getColor(android.R.color.darker_gray))
+
+        // 讀取緊急聯絡人
+        val prefs = getSharedPreferences("gps_tracker_prefs", MODE_PRIVATE)
+        val emergencyContacts = prefs.getStringSet("emergency_contacts", emptySet()) ?: emptySet()
+
+        if (emergencyContacts.isEmpty()) {
+            Toast.makeText(this, "請先設定緊急聯絡人", Toast.LENGTH_LONG).show()
+            return
         }
+
+        // 發送緊急求救
+        emergencyButton.isEnabled = false
+        emergencyButton.text = "發送中..."
+
+        Thread {
+            try {
+                // 取得伺服器網址
+                val serverUrl = prefs.getString("server_url", "") ?: ""
+                if (serverUrl.isEmpty()) {
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, "請先設定伺服器網址", Toast.LENGTH_LONG).show()
+                        emergencyButton.isEnabled = true
+                        emergencyButton.text = "緊急求救"
+                    }
+                    return@Thread
+                }
+
+                // 發送到伺服器
+                val url = java.net.URL(serverUrl.replace("receive_gps.php", "emergency_sos.php"))
+                val connection = url.openConnection() as java.net.HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.doOutput = true
+                connection.connectTimeout = 30000
+                connection.readTimeout = 30000
+
+                // 取得打卡文字（同步讀取）
+                val checkInText = prefs.getString("check_in_text", "") ?: ""
+                
+                // 建立 JSON 陣列
+                val contactsArray = emergencyContacts.joinToString(",", "[", "]") { "\"$it\"" }
+                
+                // 建立 JSON，根據是否有打卡文字決定是否包含
+                val jsonBody = if (checkInText.isNotEmpty()) {
+                    """
+                    {
+                        "lat": $lat,
+                        "lng": $lng,
+                        "accuracy": $accuracy,
+                        "timestamp": "$timestamp",
+                        "contacts": $contactsArray,
+                        "check_in": "$checkInText"
+                    }
+                    """.trimIndent()
+                } else {
+                    """
+                    {
+                        "lat": $lat,
+                        "lng": $lng,
+                        "accuracy": $accuracy,
+                        "timestamp": "$timestamp",
+                        "contacts": $contactsArray
+                    }
+                    """.trimIndent()
+                }
+
+                val outputStream = connection.outputStream
+                outputStream.write(jsonBody.toByteArray())
+                outputStream.flush()
+                outputStream.close()
+
+                val responseCode = connection.responseCode
+                
+                // 讀取伺服器回應
+                val responseBody = connection.inputStream.bufferedReader().readText()
+                
+                // 解析 JSON 回應
+                val jsonResponse = try {
+                    JSONObject(responseBody)
+                } catch (e: Exception) {
+                    null
+                }
+                
+                val success = jsonResponse?.optBoolean("success", false) ?: false
+                val message = jsonResponse?.optString("message", "") ?: ""
+                val failedContacts = jsonResponse?.optJSONArray("failed_contacts")
+                
+                runOnUiThread {
+                    if (success || responseCode == 200 || responseCode == 201) {
+                        val successCount = jsonResponse?.optInt("success_count", 0) ?: 0
+                        Toast.makeText(this@MainActivity, "緊急求救已發送給 $successCount 位聯絡人", Toast.LENGTH_LONG).show()
+                        
+                        // 如果有失敗的聯絡人，顯示訊息
+                        if (failedContacts != null && failedContacts.length() > 0) {
+                            val failedList = (0 until failedContacts.length()).joinToString(", ") { failedContacts.getString(it) }
+                            Toast.makeText(this@MainActivity, "以下聯絡人發送失敗: $failedList", Toast.LENGTH_LONG).show()
+                        }
+                    } else {
+                        // 顯示伺服器回傳的錯誤訊息
+                        val errorMsg = if (message.isNotEmpty()) message else "HTTP 錯誤: $responseCode"
+                        Toast.makeText(this@MainActivity, "發送失敗: $errorMsg", Toast.LENGTH_LONG).show()
+                    }
+                    emergencyButton.isEnabled = true
+                    emergencyButton.text = "緊急求救"
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "發送錯誤: ${e.message}", Toast.LENGTH_LONG).show()
+                    emergencyButton.isEnabled = true
+                    emergencyButton.text = "緊急求救"
+                }
+            }
+        }.start()
     }
 
     private fun updateStatus() {
         val isRunning = LocationService.isRunning
-        statusText.text = if (isRunning) {
-            "狀態：正在追蹤 GPS"
-        } else {
-            "狀態：已停止"
-        }
         startButton.isEnabled = !isRunning
         stopButton.isEnabled = isRunning
     }
@@ -375,14 +497,6 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         if (isAuthenticated) {
             updateStatus()
-            if (LocationService.isRunning) {
-                registerLocationReceiver()
-            }
         }
-    }
-    
-    override fun onPause() {
-        super.onPause()
-        unregisterLocationReceiver()
     }
 }

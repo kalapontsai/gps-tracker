@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>位置回報</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .card { background: white; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); width: 100%; max-width: 400px; padding: 32px 24px; text-align: center; }
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    h1 { font-size: 20px; color: #1a1a2e; margin-bottom: 8px; }
+    p { font-size: 14px; color: #666; margin-bottom: 24px; line-height: 1.5; }
+    .device-id { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin-bottom: 20px; }
+    .device-id label { font-size: 12px; color: #888; display: block; margin-bottom: 4px; }
+    .device-id code { font-size: 13px; color: #333; word-break: break-all; }
+    input[type="text"] { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; margin-bottom: 16px; text-align: center; }
+    button { width: 100%; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .btn-primary { background: #4a90e2; color: white; margin-bottom: 12px; }
+    .btn-primary:hover { background: #3a7bc8; }
+    .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+    .btn-secondary { background: #f0f0f0; color: #333; font-size: 14px; padding: 10px; display: none; width: 100%; }
+    .result { margin-top: 20px; padding: 16px; border-radius: 12px; font-size: 14px; display: none; }
+    .result.success { background: #e8f5e9; color: #2e7d32; }
+    .result.error { background: #ffebee; color: #c62828; }
+    .result.info { background: #e3f2fd; color: #1565c0; }
+    .coords { font-size: 13px; margin-top: 8px; color: #555; }
+    .auto-area { margin: 16px 0; }
+    .auto-area label { font-size: 13px; color: #555; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
+    .auto-area input[type="checkbox"] { width: 16px; height: 16px; }
+    .status { font-size: 12px; color: #888; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon" id="icon">📍</div>
+    <h1 id="title">位置回報</h1>
+    <p id="desc">按下按鈕，將您的位置以安全方式回傳到伺服器保存。</p>
+
+    <div class="device-id">
+      <label>裝置識別碼</label>
+      <code id="deviceIdDisplay">載入中...</code>
+    </div>
+
+    <input type="text" id="nicknameInput" placeholder="暱稱（選填）" maxlength="50">
+
+    <div class="auto-area">
+      <label>
+        <input type="checkbox" id="autoCheck">
+        自動重試直到成功（最多 3 次）
+      </label>
+    </div>
+
+    <button class="btn-primary" id="btn" onclick="requestLocation()">取得並回傳位置</button>
+    <button class="btn-secondary" id="btnClose" onclick="closePage()">關閉頁面</button>
+
+    <div class="result" id="result"></div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <script>
+    // 從網址參數取得 server_url（由伺服器注入）
+    const CONFIG = window.GPS_CONFIG || {};
+    const SERVER_URL = CONFIG.server_url || location.origin.replace(/\/$/, '');
+    const API_PATH = '/receive_gps.php';
+
+    // 自動產生 device_id（同一瀏覽器重複使用，永不過期）
+    function getDeviceId() {
+      let id = localStorage.getItem('gps_device_id');
+      if (!id) {
+        id = 'web_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('gps_device_id', id);
+      }
+      return id;
+    }
+
+    // 讀取並填入已儲存的暱稱
+    function loadSavedNickname() {
+      const saved = localStorage.getItem('gps_nickname');
+      if (saved) {
+        document.getElementById('nicknameInput').value = saved;
+      }
+    }
+
+    const deviceId = getDeviceId();
+    document.getElementById('deviceIdDisplay').textContent = deviceId;
+    loadSavedNickname();
+
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
+
+    function setStatus(msg) {
+      document.getElementById('status').textContent = msg;
+    }
+
+    function showResult(msg, type, coords) {
+      const el = document.getElementById('result');
+      el.className = 'result ' + type;
+      el.innerHTML = msg + (coords ? '<div class="coords">' + coords + '</div>' : '');
+      el.style.display = 'block';
+    }
+
+    function closePage() {
+      // 先嘗試 window.close，若失敗則顯示提示
+      var closed = false;
+      try {
+        window.close();
+        closed = true;
+      } catch (e) {
+        closed = false;
+      }
+      if (!closed) {
+        // 顯示引導關閉的提示（行動瀏覽器不允許 JS 關閉自己）
+        document.getElementById('btnClose').style.display = 'none';
+        showResult('請手動關閉此頁面（滑到最上層，點選關閉鈕）', 'info');
+      }
+    }
+
+    function updateUI(success, retrying) {
+      const btn = document.getElementById('btn');
+      const btnClose = document.getElementById('btnClose');
+      const icon = document.getElementById('icon');
+      const autoCheck = document.getElementById('autoCheck');
+
+      if (success) {
+        btn.textContent = '回傳成功';
+        btn.disabled = true;
+        btn.style.background = '#888';
+        btnClose.style.display = 'block';
+        autoCheck.checked = false;
+        autoCheck.disabled = true;
+        icon.textContent = '✅';
+      } else if (retrying) {
+        btn.textContent = '重試中... (' + retryCount + '/' + MAX_RETRIES + ')';
+        btn.disabled = true;
+        icon.textContent = '🔄';
+      } else {
+        btn.textContent = '取得並回傳位置';
+        btn.disabled = false;
+        icon.textContent = '📍';
+      }
+    }
+
+    function sendLocation(lat, lng, accuracy) {
+      const nickname = document.getElementById('nicknameInput').value.trim();
+      if (nickname) {
+        localStorage.setItem('gps_nickname', nickname);
+      }
+      const autoRetry = document.getElementById('autoCheck').checked;
+
+      const payload = {
+        lat: lat,
+        lng: lng,
+        accuracy: accuracy,
+        device_id: deviceId,
+        nickname: nickname,
+        timestamp: (function() {
+          var d = new Date();
+          var pad = function(n) { return n < 10 ? '0' + n : n; };
+          return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate())
+            + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+        })(),
+        source: 'web_pull'
+      };
+
+      return fetch(SERVER_URL + API_PATH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.success) {
+          showResult(
+            '位置已成功回傳',
+            'success',
+            '緯度 ' + lat.toFixed(6) + ' / 經度 ' + lng.toFixed(6)
+          );
+          updateUI(true, false);
+          return true;
+        } else {
+          throw new Error(data.message || '伺服器回傳失敗');
+        }
+      });
+    }
+
+    function requestLocation() {
+      if (!navigator.geolocation) {
+        showResult('您的瀏覽器不支援 Geolocation API', 'error');
+        return;
+      }
+
+      updateUI(false, false);
+      showResult('', '');
+      setStatus('正在取得位置...');
+
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          var lat = position.coords.latitude;
+          var lng = position.coords.longitude;
+          var accuracy = position.coords.accuracy;
+          setStatus('');
+
+          sendLocation(lat, lng, accuracy).catch(function(err) {
+            handleSendError(err, function() {
+              return sendLocation(lat, lng, accuracy);
+            });
+          });
+        },
+        function(error) {
+          var msg;
+          switch (error.code) {
+            case 1:  msg = '請允許位置存取權限'; break;
+            case 2:  msg = '無法取得位置，請確認網路與定位功能'; break;
+            case 3:  msg = '位置取得逾時，請稍後再試'; break;
+            default: msg = '位置錯誤：' + error.message; break;
+          }
+          showResult(msg, 'error');
+          setStatus('');
+          updateUI(false, false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
+        }
+      );
+    }
+
+    function handleSendError(err, retryFn) {
+      retryCount++;
+      var autoRetry = document.getElementById('autoCheck').checked;
+
+      if (autoRetry && retryCount < MAX_RETRIES) {
+        setStatus('網路錯誤，' + (5 * retryCount) + ' 秒後重試...');
+        updateUI(false, true);
+        setTimeout(function() {
+          retryFn().catch(function(e) { handleSendError(e, retryFn); });
+        }, 5000 * retryCount);
+      } else {
+        showResult('發送失敗：' + err.message + '（請確認網路連線）', 'error');
+        setStatus('');
+        updateUI(false, false);
+        retryCount = 0;
+      }
+    }
+  </script>
+</body>
+</html>

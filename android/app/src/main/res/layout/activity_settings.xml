@@ -16,6 +16,23 @@
             android:text="設定"
             android:textSize="24sp"
             android:textStyle="bold"
+            android:layout_marginBottom="16dp" />
+
+        <!-- 讀取設定檔按鈕 -->
+        <Button
+            android:id="@+id/loadConfigButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="讀取設定檔"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 版次顯示 -->
+        <TextView
+            android:id="@+id/versionText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="#888888"
             android:layout_marginBottom="24dp" />
 
         <!-- 暱稱 -->
@@ -170,6 +187,70 @@
                 android:layout_height="wrap_content" />
 
         </LinearLayout>
+
+        <!-- 分隔線 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#DDDDDD"
+            android:layout_marginBottom="16dp" />
+
+        <!-- 緊急聯絡人設定 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="緊急聯絡人"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="按下緊急求救按鈕時會發送位置資訊給這些 Email"
+            android:textSize="12sp"
+            android:textColor="#666666"
+            android:layout_marginBottom="16dp" />
+
+        <!-- 已新增的緊急聯絡人列表 -->
+        <LinearLayout
+            android:id="@+id/emergencyContactsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 新增緊急聯絡人輸入框 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <EditText
+                android:id="@+id/emergencyContactInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="輸入 Email"
+                android:inputType="textEmailAddress" />
+
+            <Button
+                android:id="@+id/addEmergencyContactButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="新增" />
+
+        </LinearLayout>
+
+        <!-- 刪除緊急聯絡人提示 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="點選聯絡人右側的 X 刪除"
+            android:textSize="12sp"
+            android:textColor="#888888"
+            android:layout_marginBottom="24dp" />
 
         <!-- 分隔線 -->
         <View

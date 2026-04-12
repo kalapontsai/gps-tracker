@@ -1,168 +1,145 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="24dp"
-    tools:context=".MainActivity">
+    android:fillViewport="true">
 
-    <TextView
-        android:id="@+id/titleText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="GPS 追蹤器"
-        android:textSize="28sp"
-        android:textStyle="bold"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        android:layout_marginTop="48dp" />
-
-    <ImageView
-        android:id="@+id/iconImage"
-        android:layout_width="120dp"
-        android:layout_height="120dp"
-        android:src="@android:drawable/ic_menu_mylocation"
-        android:contentDescription="GPS Icon"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/titleText"
-        android:layout_marginTop="32dp"
-        app:tint="@color/purple_500" />
-
-    <TextView
-        android:id="@+id/statusText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="狀態：已停止"
-        android:textSize="18sp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/iconImage"
-        android:layout_marginTop="24dp" />
-
-    <!-- GPS 狀態資訊卡片 -->
-    <androidx.cardview.widget.CardView
-        android:id="@+id/gpsStatusCard"
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:visibility="gone"
-        app:cardCornerRadius="12dp"
-        app:cardElevation="4dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/statusText"
-        android:layout_marginTop="8dp"
-        android:layout_marginStart="8dp"
-        android:layout_marginEnd="8dp">
+        android:padding="16dp"
+        tools:context=".MainActivity">
+
+        <TextView
+            android:id="@+id/titleText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="媽媽的關心"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            android:layout_marginTop="16dp" />
+
+        <ImageView
+            android:id="@+id/iconImage"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:src="@android:drawable/ic_menu_mylocation"
+            android:contentDescription="GPS Icon"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/titleText"
+            android:layout_marginTop="12dp"
+            app:tint="@color/purple_500" />
+
+        <!-- 緊急求救按鈕 - 大顆圓形 -->
+        <Button
+            android:id="@+id/emergencyButton"
+            android:layout_width="200dp"
+            android:layout_height="200dp"
+            android:text="緊急求救"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:background="@drawable/emergency_button_bg"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/iconImage"
+            android:layout_marginTop="24dp" />
+
+        <Button
+            android:id="@+id/startButton"
+            android:layout_width="200dp"
+            android:layout_height="wrap_content"
+            android:text="開始追蹤"
+            android:textSize="14sp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/emergencyButton"
+            android:layout_marginTop="24dp" />
+
+        <Button
+            android:id="@+id/stopButton"
+            android:layout_width="200dp"
+            android:layout_height="wrap_content"
+            android:text="停止追蹤"
+            android:textSize="14sp"
+            android:enabled="false"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/startButton"
+            android:layout_marginTop="8dp" />
+
+        <Button
+            android:id="@+id/settingsButton"
+            android:layout_width="200dp"
+            android:layout_height="wrap_content"
+            android:text="設定"
+            android:textSize="14sp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/stopButton"
+            android:layout_marginTop="8dp" />
+
+        <!-- 打卡輸入欄位 -->
+        <TextView
+            android:id="@+id/checkInLabel"
+            android:layout_width="200dp"
+            android:layout_height="wrap_content"
+            android:text="打卡"
+            android:textSize="14sp"
+            android:layout_marginTop="16dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/settingsButton" />
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="200dp"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="12dp">
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/checkInLabel">
 
-            <!-- 訊號狀態 -->
-            <LinearLayout
-                android:layout_width="match_parent"
+            <EditText
+                android:id="@+id/checkInInput"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:layout_weight="1"
+                android:hint="輸入打卡內容"
+                android:inputType="text"
+                android:maxLines="1" />
 
-                <View
-                    android:id="@+id/signalIndicator"
-                    android:layout_width="10dp"
-                    android:layout_height="10dp"
-                    android:background="@drawable/signal_indicator" />
-
-                <TextView
-                    android:id="@+id/signalStatusText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="等待 GPS 訊號..."
-                    android:textSize="12sp"
-                    android:layout_marginStart="6dp" />
-
-            </LinearLayout>
-
-            <!-- 座標 -->
-            <TextView
-                android:id="@+id/coordinateText"
-                android:layout_width="match_parent"
+            <Button
+                android:id="@+id/checkInConfirmButton"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="座標：--"
+                android:text="確認"
                 android:textSize="12sp"
-                android:fontFamily="monospace"
-                android:layout_marginTop="4dp" />
-
-            <!-- 準確度與上傳狀態 -->
-            <TextView
-                android:id="@+id/accuracyText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="準確度：--"
-                android:textSize="12sp"
-                android:layout_marginTop="2dp" />
-
-            <TextView
-                android:id="@+id/uploadStatusText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="上傳狀態：--"
-                android:textSize="12sp"
-                android:layout_marginTop="2dp" />
+                android:layout_marginStart="4dp" />
 
         </LinearLayout>
 
-    </androidx.cardview.widget.CardView>
+        <TextView
+            android:id="@+id/infoText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="※ 需要位置權限\n背景追蹤需額外授權"
+            android:textSize="10sp"
+            android:textColor="#888888"
+            android:gravity="center"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="16dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/checkInInput" />
 
-    <Button
-        android:id="@+id/startButton"
-        android:layout_width="200dp"
-        android:layout_height="wrap_content"
-        android:text="開始追蹤"
-        android:textSize="16sp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/gpsStatusCard"
-        android:layout_marginTop="16dp" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <Button
-        android:id="@+id/stopButton"
-        android:layout_width="200dp"
-        android:layout_height="wrap_content"
-        android:text="停止追蹤"
-        android:textSize="16sp"
-        android:enabled="false"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/startButton"
-        android:layout_marginTop="12dp" />
-
-    <Button
-        android:id="@+id/settingsButton"
-        android:layout_width="200dp"
-        android:layout_height="wrap_content"
-        android:text="設定"
-        android:textSize="16sp"
-        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/stopButton"
-        android:layout_marginTop="12dp" />
-
-    <TextView
-        android:id="@+id/infoText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="※ 需要位置權限才能使用\n背景追蹤需要額外授權"
-        android:textSize="12sp"
-        android:textColor="#888888"
-        android:gravity="center"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        android:layout_marginBottom="32dp" />
-
-</androidx.constraintlayout.widget.ConstraintLayout>
+</ScrollView>
