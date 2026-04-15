@@ -36,7 +36,6 @@ class LocationService : Service() {
         private const val ERROR_CHANNEL_ID = "gps_tracker_error_channel"
         private const val CHECK_DELAY_MS = 3000L
         private const val MAX_CONSECUTIVE_FAILURES = 3
-        private const val LINE_NOTIFY_URL = "https://notify-api.line.me/api/notify"
 
         // 廣播 Action
         const val ACTION_LOCATION_UPDATE = "com.example.gpstracker.LOCATION_UPDATE"
@@ -106,11 +105,6 @@ class LocationService : Service() {
     private val serverUrl: String by lazy {
         val prefs = getSharedPreferences("gps_tracker_prefs", Context.MODE_PRIVATE)
         prefs.getString("server_url", "") ?: ""
-    }
-
-    private val lineNotifyToken: String by lazy {
-        val prefs = getSharedPreferences("gps_tracker_prefs", Context.MODE_PRIVATE)
-        prefs.getString("line_notify_token", "") ?: ""
     }
 
     private val uploadInterval: Long by lazy {
@@ -489,12 +483,12 @@ class LocationService : Service() {
         
         Log.w(TAG, "Upload failure #$consecutiveFailures: $errorMsg")
         
-        // 同時發送到 LINE Notify
-        sendLineNotify("GPS 追蹤異常", errorMsg)
+        // 同時發送錯誤通知 Email
+        sendErrorEmail(errorMsg)
         
         if (consecutiveFailures > MAX_CONSECUTIVE_FAILURES) {
             showRetryNotification()
-            sendLineNotify("GPS 追蹤持續失敗", "已連續失敗 $consecutiveFailures 次，請重新啟動 App")
+            sendErrorEmail("GPS 追蹤持續失敗：已連續失敗 $consecutiveFailures 次，請重新啟動 App")
         } else {
             showErrorNotification("上傳失敗 ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): $errorMsg")
         }
@@ -515,10 +509,10 @@ class LocationService : Service() {
         // 可選擇是否要通知，但目前不影響主要功能
     }
 
-    // 發送 LINE Notify
-    private fun sendLineNotify(title: String, message: String) {
-        if (lineNotifyToken.isEmpty()) {
-            Log.w(TAG, "LINE Notify token not configured, skipping notification")
+    // 發送錯誤通知 Email
+    private fun sendErrorEmail(errorMsg: String) {
+        if (serverUrl.isEmpty()) {
+            Log.w(TAG, "Server URL not configured, cannot send error email")
             return
         }
 
@@ -529,33 +523,37 @@ class LocationService : Service() {
                     .readTimeout(30, TimeUnit.SECONDS)
                     .build()
 
-                val fullMessage = """
-                    $title
-                    
-                    暱稱: $nickname
-                    裝置: ${deviceId.take(8)}...
-                    錯誤: $message
-                    時間: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}
+                val jsonBody = """
+                    {
+                        "device_id": "$deviceId",
+                        "nickname": "$nickname",
+                        "error_message": "$errorMsg",
+                        "fail_count": $consecutiveFailures,
+                        "lat": $lastSuccessfulLat,
+                        "lng": $lastSuccessfulLng
+                    }
                 """.trimIndent()
 
-                val formBody = "message=${java.net.URLEncoder.encode(fullMessage, "UTF-8")}"
-                    .toRequestBody("application/x-www-form-urlencoded".toMediaType())
+                val requestBody = jsonBody.toRequestBody("application/json".toMediaType())
+
+                // error_notification.php 與 serverUrl 同目錄
+                val errorNotifyUrl = serverUrl.replace("receive_gps.php", "error_notification.php")
+                    .replace("update_db.php", "error_notification.php")
 
                 val request = Request.Builder()
-                    .url(LINE_NOTIFY_URL)
-                    .addHeader("Authorization", "Bearer $lineNotifyToken")
-                    .post(formBody)
+                    .url(errorNotifyUrl)
+                    .post(requestBody)
                     .build()
 
                 client.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
-                        Log.d(TAG, "LINE Notify sent successfully")
+                        Log.d(TAG, "Error notification email sent successfully")
                     } else {
-                        Log.e(TAG, "LINE Notify failed: ${response.code}")
+                        Log.e(TAG, "Error notification email failed: ${response.code}")
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "LINE Notify error: ${e.message}")
+                Log.e(TAG, "Error sending error email: ${e.message}")
             }
         }
     }
