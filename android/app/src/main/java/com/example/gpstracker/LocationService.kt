@@ -128,7 +128,6 @@ class LocationService : Service() {
         Log.d(TAG, "Upload interval: ${uploadInterval}ms")
         Log.d(TAG, "Consecutive failures: $consecutiveFailures")
         Log.d(TAG, "Last successful coords: $lastSuccessfulLat, $lastSuccessfulLng")
-        Log.d(TAG, "LINE Notify token: ${if (lineNotifyToken.isNotEmpty()) "configured" else "not set"}")
 
         if (serverUrl.isEmpty()) {
             showErrorNotification("請設定伺服器網址")
