@@ -13,8 +13,8 @@ build/
 app/build/
 
 # APK
-*.apk
 *.aab
+!app/apk/*.apk
 
 # Log
 *.log
