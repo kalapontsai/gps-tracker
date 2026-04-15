@@ -148,6 +148,21 @@ if (file_exists($dbFile)) {
             cursor: pointer;
             font-size: 14px;
         }
+        .export-btn {
+            padding: 10px 20px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        .export-btn:hover {
+            background: #218838;
+        }
         .filter-group button:hover {
             background: #5568d3;
         }
@@ -300,6 +315,9 @@ if (file_exists($dbFile)) {
                     </div>
                     <div class="filter-group">
                         <button type="submit">篩選</button>
+                    </div>
+                    <div class="filter-group">
+                        <a href="export_locations.php?<?php echo http_build_query(array_intersect_key($_GET, array_flip(['start_date', 'end_date', 'nickname']))); ?>" class="export-btn">匯出 JSON</a>
                     </div>
                 </div>
             </form>

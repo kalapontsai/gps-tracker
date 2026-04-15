@@ -21,6 +21,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -33,6 +34,8 @@ class LocationService : Service() {
         private const val ERROR_NOTIFICATION_ID = 2
         private const val CHANNEL_ID = "gps_tracker_channel"
         private const val ERROR_CHANNEL_ID = "gps_tracker_error_channel"
+        private const val CHECK_DELAY_MS = 3000L
+        private const val MAX_CONSECUTIVE_FAILURES = 3
 
         // 廣播 Action
         const val ACTION_LOCATION_UPDATE = "com.example.gpstracker.LOCATION_UPDATE"
@@ -81,6 +84,9 @@ class LocationService : Service() {
     private lateinit var locationCallback: LocationCallback
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    // 連續失敗次數（跨 sessions）
+    private var consecutiveFailures = 0
+
     // 裝置識別碼
     private val deviceId: String by lazy {
         val prefs = getSharedPreferences("gps_tracker_prefs", Context.MODE_PRIVATE)
@@ -110,12 +116,6 @@ class LocationService : Service() {
         interval * 1000 // 轉換為毫秒
     }
 
-    // 是否使用網路定位
-    private val useNetworkLocation: Boolean by lazy {
-        val prefs = getSharedPreferences("gps_tracker_prefs", Context.MODE_PRIVATE)
-        prefs.getBoolean("network_location", false)
-    }
-
     override fun onCreate() {
         super.onCreate()
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
@@ -128,6 +128,7 @@ class LocationService : Service() {
         Log.d(TAG, "Service starting...")
         Log.d(TAG, "Server URL: $serverUrl")
         Log.d(TAG, "Upload interval: ${uploadInterval}ms")
+        Log.d(TAG, "Consecutive failures: $consecutiveFailures")
 
         // 檢查伺服器網址
         if (serverUrl.isEmpty()) {
@@ -164,37 +165,37 @@ class LocationService : Service() {
     private fun setupLocationCallback() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
-                // 如果服務已停止，則不處理
                 if (!isRunning) {
                     return
                 }
 
+                // 只接受 GPS 定位，精準度超過 100m 不上傳
                 locationResult.lastLocation?.let { location ->
-                    Log.d(TAG, "Location update: ${location.latitude}, ${location.longitude}")
+                    val accuracy = location.accuracy
+                    
+                    // 只處理 GPS 定位，不使用 Network (WiFi) 定位
+                    if (!location.isFromMockProvider) {
+                        Log.d(TAG, "Location update: ${location.latitude}, ${location.longitude}, accuracy: ${accuracy}m")
 
-                    // 更新位置變數
-                    currentLat = location.latitude
-                    currentLng = location.longitude
-                    currentAccuracy = location.accuracy
+                        currentLat = location.latitude
+                        currentLng = location.longitude
+                        currentAccuracy = accuracy
 
-                    // 更新最後收到 GPS 的時間
-                    lastGpsReceivedTime = System.currentTimeMillis()
-                    isGpsAvailable = true
+                        lastGpsReceivedTime = System.currentTimeMillis()
+                        isGpsAvailable = true
 
-                    // 廣播位置更新
-                    broadcastLocationUpdate(location.latitude, location.longitude, location.accuracy, true)
+                        broadcastLocationUpdate(location.latitude, location.longitude, accuracy, true)
 
-                    sendLocationToServer(location.latitude, location.longitude, location.accuracy)
+                        sendLocationToServer(location.latitude, location.longitude, accuracy)
+                    }
                 }
             }
 
             override fun onLocationAvailability(locationAvailability: LocationAvailability) {
-                // 如果服務已停止，則不處理
                 if (!isRunning) {
                     return
                 }
                 
-                // 只在狀態真正改變時廣播，避免頻繁廣播耗電
                 val available = locationAvailability.isLocationAvailable
                 if (available != isGpsAvailable) {
                     isGpsAvailable = available
@@ -206,7 +207,6 @@ class LocationService : Service() {
 
     // 廣播位置更新
     private fun broadcastLocationUpdate(lat: Double, lng: Double, accuracy: Float, gpsAvailable: Boolean) {
-        // 計算下次上傳時間
         nextUploadTime = lastGpsReceivedTime + uploadInterval
         
         val intent = Intent(ACTION_LOCATION_UPDATE).apply {
@@ -239,17 +239,12 @@ class LocationService : Service() {
             return
         }
 
-        // 使用使用者設定的間隔
         val fastestInterval = uploadInterval / 2
 
-        // 根據設定選擇定位模式
-        val priority = if (useNetworkLocation) {
-            Priority.PRIORITY_BALANCED_POWER_ACCURACY  // 混合 GPS + 網路定位
-        } else {
-            Priority.PRIORITY_HIGH_ACCURACY  // 僅 GPS
-        }
+        // 僅使用 GPS 定位（移除網路定位功能）
+        val priority = Priority.PRIORITY_HIGH_ACCURACY
 
-        Log.d(TAG, "Using priority: $priority, network location: $useNetworkLocation")
+        Log.d(TAG, "Using priority: $priority (GPS only)")
 
         val locationRequest = LocationRequest.Builder(
             priority,
@@ -286,7 +281,6 @@ class LocationService : Service() {
     }
 
     private fun sendLocationToServer(lat: Double, lng: Double, accuracy: Float) {
-        // 檢查是否有設定伺服器網址
         if (serverUrl.isEmpty()) {
             Log.w(TAG, "Server URL not configured")
             lastUploadSuccess = false
@@ -295,7 +289,6 @@ class LocationService : Service() {
             return
         }
 
-        // 取得打卡文字
         val checkInText = getAndClearCheckInText()
 
         serviceScope.launch {
@@ -305,11 +298,10 @@ class LocationService : Service() {
                     .writeTimeout(30, TimeUnit.SECONDS)
                     .build()
 
-                val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).apply {
+                val timestamp = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).apply {
                     timeZone = TimeZone.getDefault()
                 }.format(Date())
 
-                // 建立 JSON，根據是否有打卡文字決定是否包含
                 val jsonBody = if (checkInText.isNotEmpty()) {
                     """
                     {
@@ -344,24 +336,124 @@ class LocationService : Service() {
 
                 client.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
-                        Log.d(TAG, "Location sent successfully")
-                        lastUploadSuccess = true
-                        lastErrorMessage = ""
-                        clearErrorNotification()
+                        Log.d(TAG, "Location sent, checking verification after ${CHECK_DELAY_MS}ms")
+                        
+                        // 延遲 3 秒後檢查 server 是否已新增紀錄
+                        delay(CHECK_DELAY_MS)
+                        verifyLocationRecorded(lat, lng, timestamp)
                     } else {
                         Log.e(TAG, "Failed to send location: ${response.code}")
-                        lastUploadSuccess = false
-                        lastErrorMessage = "HTTP 錯誤: ${response.code}"
-                        showErrorNotification("上傳失敗: ${response.code}")
+                        handleUploadFailure("HTTP 錯誤: ${response.code}")
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending location: ${e.message}")
-                lastUploadSuccess = false
-                lastErrorMessage = e.message ?: "網路錯誤"
-                showErrorNotification("上傳錯誤: ${e.message}")
+                handleUploadFailure(e.message ?: "網路錯誤")
             }
         }
+    }
+
+    // 檢查 server 是否已新增紀錄
+    private fun verifyLocationRecorded(lat: Double, lng: Double, timestamp: String) {
+        if (serverUrl.isEmpty()) return
+
+        try {
+            val client = OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(10, TimeUnit.SECONDS)
+                .build()
+
+            // get_locations.php API 查詢最新一筆記錄
+            val checkUrl = serverUrl.replace("receive_gps.php", "get_locations.php")
+                .replace("update_db.php", "get_locations.php")
+            
+            val request = Request.Builder()
+                .url("$checkUrl?device_id=$deviceId&limit=1")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val body = response.body?.string() ?: ""
+                    val json = JSONObject(body)
+                    val locations = json.optJSONArray("locations")
+                    
+                    if (locations != null && locations.length() > 0) {
+                        val latest = locations.getJSONObject(0)
+                        val latestLat = latest.optDouble("latitude", 0.0)
+                        val latestLng = latest.optDouble("longitude", 0.0)
+                        
+                        // 檢查經緯度是否吻合（允許小數點後 4 位誤差）
+                        val isMatch = kotlin.math.abs(latestLat - lat) < 0.0001 &&
+                                     kotlin.math.abs(latestLng - lng) < 0.0001
+                        
+                        if (isMatch) {
+                            Log.d(TAG, "Location verified successfully on server")
+                            handleUploadSuccess()
+                        } else {
+                            Log.w(TAG, "Location mismatch: server lat=$latestLat, sent lat=$lat")
+                            handleUploadFailure("驗證失敗：位置不符")
+                        }
+                    } else {
+                        Log.w(TAG, "No location record found on server")
+                        handleUploadFailure("驗證失敗：找不到紀錄")
+                    }
+                } else {
+                    Log.e(TAG, "Verification failed: ${response.code}")
+                    handleUploadFailure("驗證失敗：HTTP ${response.code}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Verification error: ${e.message}")
+            handleUploadFailure("驗證錯誤：${e.message}")
+        }
+    }
+
+    // 處理上傳失敗
+    private fun handleUploadFailure(errorMsg: String) {
+        consecutiveFailures++
+        lastUploadSuccess = false
+        lastErrorMessage = errorMsg
+        
+        Log.w(TAG, "Upload failure #$consecutiveFailures: $errorMsg")
+        
+        if (consecutiveFailures > MAX_CONSECUTIVE_FAILURES) {
+            showRetryNotification()
+        } else {
+            showErrorNotification("上傳失敗 ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): $errorMsg")
+        }
+    }
+
+    // 處理上傳成功
+    private fun handleUploadSuccess() {
+        if (consecutiveFailures > 0) {
+            Log.d(TAG, "Resetting consecutive failures from $consecutiveFailures to 0")
+        }
+        consecutiveFailures = 0
+        lastUploadSuccess = true
+        lastErrorMessage = ""
+        clearErrorNotification()
+    }
+
+    // 顯示重試通知（超過 3 次連續失敗）
+    private fun showRetryNotification() {
+        val intent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, ERROR_CHANNEL_ID)
+            .setContentTitle("GPS 追蹤持續失敗")
+            .setContentText("請重新啟動 App 以恢復正常運作")
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.notify(ERROR_NOTIFICATION_ID, notification)
     }
 
     private fun createNotificationChannel() {
@@ -428,9 +520,10 @@ class LocationService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // 根據上傳狀態顯示不同文字
         val statusText = if (lastUploadSuccess) {
             "運作正常"
+        } else if (consecutiveFailures > MAX_CONSECUTIVE_FAILURES) {
+            "持續失敗，請重啟 App"
         } else if (lastErrorMessage.isNotEmpty()) {
             "異常: $lastErrorMessage"
         } else {
