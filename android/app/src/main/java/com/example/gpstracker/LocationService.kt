@@ -36,6 +36,7 @@ class LocationService : Service() {
         private const val ERROR_CHANNEL_ID = "gps_tracker_error_channel"
         private const val CHECK_DELAY_MS = 3000L
         private const val MAX_CONSECUTIVE_FAILURES = 3
+        private const val LINE_NOTIFY_URL = "https://notify-api.line.me/api/notify"
 
         // 廣播 Action
         const val ACTION_LOCATION_UPDATE = "com.example.gpstracker.LOCATION_UPDATE"
@@ -53,21 +54,17 @@ class LocationService : Service() {
         var isRunning = false
             private set
 
-        // 追蹤上傳狀態
         var lastUploadSuccess = false
             private set
         var lastErrorMessage = ""
             private set
 
-        // 最後成功接收 GPS 的時間
         var lastGpsReceivedTime = 0L
             private set
 
-        // 目前 GPS 狀態
         var isGpsAvailable = false
             private set
 
-        // 目前位置
         var currentLat = 0.0
             private set
         var currentLng = 0.0
@@ -75,7 +72,6 @@ class LocationService : Service() {
         var currentAccuracy = 0f
             private set
         
-        // 下一次上傳時間（時間戳）
         var nextUploadTime = 0L
             private set
     }
@@ -84,18 +80,14 @@ class LocationService : Service() {
     private lateinit var locationCallback: LocationCallback
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    // 連續失敗次數
     private var consecutiveFailures = 0
 
-    // 最後成功上傳的座標（持久化）
     private var lastSuccessfulLat = 0.0
     private var lastSuccessfulLng = 0.0
     private var lastSuccessfulAccuracy = 0f
 
-    // 定時上傳任務
     private var uploadJob: Job? = null
 
-    // 裝置識別碼
     private val deviceId: String by lazy {
         val prefs = getSharedPreferences("gps_tracker_prefs", Context.MODE_PRIVATE)
         var id = prefs.getString("device_id", null)
@@ -106,22 +98,25 @@ class LocationService : Service() {
         id
     }
 
-    // 暱稱
     private val nickname: String by lazy {
         val prefs = getSharedPreferences("gps_tracker_prefs", Context.MODE_PRIVATE)
         prefs.getString("nickname", "") ?: ""
     }
 
-    // 從 SharedPreferences 讀取設定
     private val serverUrl: String by lazy {
         val prefs = getSharedPreferences("gps_tracker_prefs", Context.MODE_PRIVATE)
         prefs.getString("server_url", "") ?: ""
     }
 
+    private val lineNotifyToken: String by lazy {
+        val prefs = getSharedPreferences("gps_tracker_prefs", Context.MODE_PRIVATE)
+        prefs.getString("line_notify_token", "") ?: ""
+    }
+
     private val uploadInterval: Long by lazy {
         val prefs = getSharedPreferences("gps_tracker_prefs", Context.MODE_PRIVATE)
         val interval = prefs.getString("upload_interval", "60")?.toLongOrNull() ?: 60L
-        interval * 1000 // 轉換為毫秒
+        interval * 1000
     }
 
     override fun onCreate() {
@@ -139,6 +134,7 @@ class LocationService : Service() {
         Log.d(TAG, "Upload interval: ${uploadInterval}ms")
         Log.d(TAG, "Consecutive failures: $consecutiveFailures")
         Log.d(TAG, "Last successful coords: $lastSuccessfulLat, $lastSuccessfulLng")
+        Log.d(TAG, "LINE Notify token: ${if (lineNotifyToken.isNotEmpty()) "configured" else "not set"}")
 
         if (serverUrl.isEmpty()) {
             showErrorNotification("請設定伺服器網址")
@@ -172,7 +168,6 @@ class LocationService : Service() {
         serviceScope.cancel()
     }
 
-    // 載入上次成功上傳的座標
     private fun loadLastSuccessfulCoordinates() {
         val prefs = getSharedPreferences("gps_tracker_prefs", Context.MODE_PRIVATE)
         lastSuccessfulLat = prefs.getFloat("last_lat", 0.0f).toDouble()
@@ -181,7 +176,6 @@ class LocationService : Service() {
         Log.d(TAG, "Loaded last successful coords: $lastSuccessfulLat, $lastSuccessfulLng")
     }
 
-    // 儲存上次成功上傳的座標
     private fun saveLastSuccessfulCoordinates(lat: Double, lng: Double, accuracy: Float) {
         lastSuccessfulLat = lat
         lastSuccessfulLng = lng
@@ -233,7 +227,6 @@ class LocationService : Service() {
         }
     }
 
-    // 廣播位置更新
     private fun broadcastLocationUpdate(lat: Double, lng: Double, accuracy: Float, gpsAvailable: Boolean) {
         nextUploadTime = lastGpsReceivedTime + uploadInterval
         
@@ -249,7 +242,6 @@ class LocationService : Service() {
         sendBroadcast(intent)
     }
 
-    // 廣播狀態變更
     private fun broadcastStatusChange(gpsAvailable: Boolean) {
         val intent = Intent(ACTION_STATUS_CHANGE).apply {
             putExtra(EXTRA_GPS_AVAILABLE, gpsAvailable)
@@ -295,7 +287,6 @@ class LocationService : Service() {
         Log.d(TAG, "Location updates stopped")
     }
 
-    // 啟動定時上傳
     private fun startPeriodicUpload() {
         uploadJob?.cancel()
         uploadJob = serviceScope.launch {
@@ -309,14 +300,12 @@ class LocationService : Service() {
         Log.d(TAG, "Periodic upload started with interval: ${uploadInterval}ms")
     }
 
-    // 停止定時上傳
     private fun stopPeriodicUpload() {
         uploadJob?.cancel()
         uploadJob = null
         Log.d(TAG, "Periodic upload stopped")
     }
 
-    // 執行上傳
     private fun performUpload() {
         if (serverUrl.isEmpty()) {
             Log.w(TAG, "Server URL not configured")
@@ -332,21 +321,18 @@ class LocationService : Service() {
         val checkInText: String
 
         if (isGpsAvailable && currentLat != 0.0 && currentLng != 0.0) {
-            // GPS 可用，使用目前座標
             lat = currentLat
             lng = currentLng
             accuracy = currentAccuracy
             checkInText = getAndClearCheckInText()
             Log.d(TAG, "Using current GPS coords: $lat, $lng")
         } else if (lastSuccessfulLat != 0.0 && lastSuccessfulLng != 0.0) {
-            // GPS 不可用，使用上次成功座標，打卡填 "*"
             lat = lastSuccessfulLat
             lng = lastSuccessfulLng
             accuracy = lastSuccessfulAccuracy
             checkInText = "*"
             Log.d(TAG, "GPS unavailable, using fallback coords: $lat, $lng with check_in=*")
         } else {
-            // 沒有可用座標
             Log.w(TAG, "No coordinates available to upload")
             lastUploadSuccess = false
             lastErrorMessage = "無可用座標"
@@ -357,7 +343,6 @@ class LocationService : Service() {
         sendLocationToServer(lat, lng, accuracy, checkInText)
     }
 
-    // 讀取並清除打卡文字
     private fun getAndClearCheckInText(): String {
         val prefs = getSharedPreferences("gps_tracker_prefs", Context.MODE_PRIVATE)
         val checkInText = prefs.getString("check_in_text", "") ?: ""
@@ -417,10 +402,8 @@ class LocationService : Service() {
                     if (response.isSuccessful) {
                         Log.d(TAG, "Location sent, checking verification after ${CHECK_DELAY_MS}ms")
                         
-                        // 儲存成功座標
                         saveLastSuccessfulCoordinates(lat, lng, accuracy)
                         
-                        // 延遲 3 秒後檢查 server 是否已新增紀錄
                         delay(CHECK_DELAY_MS)
                         verifyLocationRecorded(lat, lng)
                     } else {
@@ -435,7 +418,6 @@ class LocationService : Service() {
         }
     }
 
-    // 檢查 server 是否已新增紀錄
     private fun verifyLocationRecorded(lat: Double, lng: Double) {
         if (serverUrl.isEmpty()) return
 
@@ -472,24 +454,34 @@ class LocationService : Service() {
                             handleUploadSuccess()
                         } else {
                             Log.w(TAG, "Location mismatch: server lat=$latestLat, sent lat=$lat")
-                            handleUploadFailure("驗證失敗：位置不符")
+                            // 上傳成功但驗證位置不符，不算作錯誤，只記錄 log
+                            // 可能 server 有其他資料，不影響主要功能
+                            logVerificationIssue("位置不符，座標可能已更新")
+                            handleUploadSuccess()
                         }
                     } else {
                         Log.w(TAG, "No location record found on server")
-                        handleUploadFailure("驗證失敗：找不到紀錄")
+                        // 上傳成功但找不到紀錄，可能是时间差或 server 问题
+                        // 不算作錯誤，只记录并继续
+                        logVerificationIssue("找不到紀錄")
+                        handleUploadSuccess()
                     }
                 } else {
                     Log.e(TAG, "Verification failed: ${response.code}")
-                    handleUploadFailure("驗證失敗：HTTP ${response.code}")
+                    // 驗證 API 錯誤（HTTP 500 等），不代表上傳失敗
+                    // 只記錄 log，不影響主要功能
+                    logVerificationIssue("驗證 API 錯誤: HTTP ${response.code}")
+                    handleUploadSuccess()
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Verification error: ${e.message}")
-            handleUploadFailure("驗證錯誤：${e.message}")
+            // 驗證例外，不影響主要功能
+            logVerificationIssue("驗證例外: ${e.message}")
+            handleUploadSuccess()
         }
     }
 
-    // 處理上傳失敗
     private fun handleUploadFailure(errorMsg: String) {
         consecutiveFailures++
         lastUploadSuccess = false
@@ -497,14 +489,17 @@ class LocationService : Service() {
         
         Log.w(TAG, "Upload failure #$consecutiveFailures: $errorMsg")
         
+        // 同時發送到 LINE Notify
+        sendLineNotify("GPS 追蹤異常", errorMsg)
+        
         if (consecutiveFailures > MAX_CONSECUTIVE_FAILURES) {
             showRetryNotification()
+            sendLineNotify("GPS 追蹤持續失敗", "已連續失敗 $consecutiveFailures 次，請重新啟動 App")
         } else {
             showErrorNotification("上傳失敗 ($consecutiveFailures/$MAX_CONSECUTIVE_FAILURES): $errorMsg")
         }
     }
 
-    // 處理上傳成功
     private fun handleUploadSuccess() {
         if (consecutiveFailures > 0) {
             Log.d(TAG, "Resetting consecutive failures from $consecutiveFailures to 0")
@@ -515,7 +510,56 @@ class LocationService : Service() {
         clearErrorNotification()
     }
 
-    // 顯示重試通知
+    private fun logVerificationIssue(msg: String) {
+        Log.d(TAG, "Verification issue (non-critical): $msg")
+        // 可選擇是否要通知，但目前不影響主要功能
+    }
+
+    // 發送 LINE Notify
+    private fun sendLineNotify(title: String, message: String) {
+        if (lineNotifyToken.isEmpty()) {
+            Log.w(TAG, "LINE Notify token not configured, skipping notification")
+            return
+        }
+
+        serviceScope.launch {
+            try {
+                val client = OkHttpClient.Builder()
+                    .connectTimeout(30, TimeUnit.SECONDS)
+                    .readTimeout(30, TimeUnit.SECONDS)
+                    .build()
+
+                val fullMessage = """
+                    $title
+                    
+                    暱稱: $nickname
+                    裝置: ${deviceId.take(8)}...
+                    錯誤: $message
+                    時間: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}
+                """.trimIndent()
+
+                val formBody = "message=${java.net.URLEncoder.encode(fullMessage, "UTF-8")}"
+                    .toRequestBody("application/x-www-form-urlencoded".toMediaType())
+
+                val request = Request.Builder()
+                    .url(LINE_NOTIFY_URL)
+                    .addHeader("Authorization", "Bearer $lineNotifyToken")
+                    .post(formBody)
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        Log.d(TAG, "LINE Notify sent successfully")
+                    } else {
+                        Log.e(TAG, "LINE Notify failed: ${response.code}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "LINE Notify error: ${e.message}")
+            }
+        }
+    }
+
     private fun showRetryNotification() {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(

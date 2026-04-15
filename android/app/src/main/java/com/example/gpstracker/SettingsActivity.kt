@@ -40,6 +40,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var loadConfigButton: Button
     private lateinit var testResultText: TextView
     private lateinit var versionText: TextView
+    private lateinit var lineNotifyTokenInput: EditText
     private lateinit var emergencyContactsContainer: LinearLayout
     private lateinit var emergencyContactInput: EditText
     private lateinit var addEmergencyContactButton: Button
@@ -222,6 +223,7 @@ class SettingsActivity : AppCompatActivity() {
         addEmergencyContactButton = findViewById(R.id.addEmergencyContactButton)
         loadConfigButton = findViewById(R.id.loadConfigButton)
         versionText = findViewById(R.id.versionText)
+        lineNotifyTokenInput = findViewById(R.id.lineNotifyTokenInput)
 
         // 密碼輸入為密碼類型
         passwordInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -245,7 +247,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun loadSettings() {
         // 顯示版次
-        versionText.text = "v1.1"
+        versionText.text = "v1.2"
 
         // 載入一般設定
         val generalPrefs = getSharedPreferences("gps_tracker_prefs", MODE_PRIVATE)
@@ -253,6 +255,10 @@ class SettingsActivity : AppCompatActivity() {
         intervalInput.setText(generalPrefs.getString("upload_interval", "60"))
         nicknameInput.setText(generalPrefs.getString("nickname", ""))
         
+        // 載入 LINE Notify Token
+        val lineNotifyToken = generalPrefs.getString("line_notify_token", "") ?: ""
+        lineNotifyTokenInput.setText(lineNotifyToken)
+
         // 顯示 Device ID
         var deviceId = generalPrefs.getString("device_id", null)
         if (deviceId == null) {
@@ -400,10 +406,12 @@ class SettingsActivity : AppCompatActivity() {
 
             // 儲存一般設定
             val generalPrefs = getSharedPreferences("gps_tracker_prefs", MODE_PRIVATE)
+            val lineNotifyToken = lineNotifyTokenInput.text.toString().trim()
             generalPrefs.edit()
                 .putString("server_url", serverUrl)
                 .putString("upload_interval", interval)
                 .putString("nickname", nickname)
+                .putString("line_notify_token", lineNotifyToken)
                 .putBoolean("network_location", networkLocationSwitch.isChecked)
                 .putBoolean("auto_start", autoStartSwitch.isChecked)
                 .putStringSet("emergency_contacts", emergencyContacts)

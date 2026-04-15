@@ -116,6 +116,30 @@
             android:inputType="number"
             android:layout_marginBottom="16dp" />
 
+        <!-- LINE Notify Token -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="LINE Notify Token"
+            android:textSize="16sp"
+            android:layout_marginBottom="8dp" />
+
+        <EditText
+            android:id="@+id/lineNotifyTokenInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="LINE Notify 個人_access_token"
+            android:inputType="text"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="從 LINE Notify 取得的 Personal Access Token"
+            android:textSize="12sp"
+            android:textColor="#666666"
+            android:layout_marginBottom="16dp" />
+
         <!-- 網路定位備援 -->
         <LinearLayout
             android:layout_width="match_parent"
